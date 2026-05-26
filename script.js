@@ -34,6 +34,7 @@ const nextMonthStart = (year = state.selectedYear, month = state.selectedMonth) 
 };
 
 const defaultState = {
+  activeView: "dashboard",
   selectedYear: currentYear,
   selectedMonth: currentMonth,
   selectedCategory: "餐饮",
@@ -120,6 +121,8 @@ const normalizeExpense = (item, index) => {
     id: item.id ?? Date.now() + index,
     type: "expense",
     title: String(item.title || item.name || category).trim() || category,
+    merchant: String(item.merchant || item.company || item.store || "").trim(),
+    reference: String(item.reference || item.receiptNo || item.receipt_no || item.paymentNo || item.payment_no || "").trim(),
     category,
     source,
     amount,
@@ -168,6 +171,9 @@ const migrateState = (saved) => {
   const next = { ...clone(defaultState), ...(saved || {}) };
   next.selectedYear = Number(next.selectedYear) || currentYear;
   next.selectedMonth = Math.min(Math.max(Number(next.selectedMonth) || currentMonth, 1), 12);
+  next.activeView = ["dashboard", "add", "records", "reports"].includes(next.activeView)
+    ? next.activeView
+    : "dashboard";
   next.selectedCategory = expenseCategories.includes(next.selectedCategory) ? next.selectedCategory : "餐饮";
   next.selectedSource = moneySources.includes(next.selectedSource) ? next.selectedSource : "电子钱包";
   next.yearPlans = {};
@@ -290,6 +296,22 @@ const updateSelectedButtons = () => {
   });
 };
 
+const renderView = () => {
+  document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.viewPanel !== state.activeView;
+  });
+
+  document.querySelectorAll("[data-view-container]").forEach((container) => {
+    const visiblePanels = [...container.querySelectorAll("[data-view-panel]")].filter((panel) => !panel.hidden);
+    container.hidden = visiblePanels.length === 0;
+    container.classList.toggle("view-single", visiblePanels.length === 1);
+  });
+
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === state.activeView);
+  });
+};
+
 const updateEntryDateForSelectedMonth = () => {
   const dateInput = document.querySelector(".entry-date");
   if (!dateInput) return;
@@ -378,12 +400,22 @@ const renderTransactions = () => {
           <div class="transaction-main">
             ${
               item.receiptImage
-                ? `<img class="receipt-thumb" src="${item.receiptImage}" alt="${cleanText(item.title)} 的收据" />`
+                ? `<button class="receipt-thumb-button" type="button" data-view-receipt="${cleanText(item.id)}" aria-label="查看 ${cleanText(item.title)} 的收据"><img class="receipt-thumb" src="${item.receiptImage}" alt="${cleanText(item.title)} 的收据" /></button>`
                 : `<span class="category-dot" style="--dot: ${categoryColors[item.category] || categoryColors.生活}"></span>`
             }
             <div class="transaction-meta">
-              <strong>${cleanText(item.title || item.category)}</strong>
+              <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
               <p>${cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}</p>
+              ${
+                item.reference
+                  ? `<p class="receipt-ref">付款/收据号：${cleanText(item.reference)}</p>`
+                  : ""
+              }
+              ${
+                item.merchant && item.title && item.title !== item.merchant
+                  ? `<p class="receipt-ref">内容：${cleanText(item.title)}</p>`
+                  : ""
+              }
             </div>
           </div>
           <div class="amount-group">
@@ -525,6 +557,7 @@ const renderAnnualReport = () => {
 const render = () => {
   ensurePlanFor(state, state.selectedYear);
   updateSelectedButtons();
+  renderView();
   renderMonthControls();
   renderPlanControls();
   renderSummary();
@@ -550,7 +583,7 @@ const receiptHint = document.querySelector(".receipt-hint");
 let receiptWorkerPromise = null;
 let receiptJob = 0;
 let receiptPreviewUrl = "";
-let pendingReceipt = { image: "", text: "" };
+let pendingReceipt = { image: "", text: "", autoSaved: false };
 
 const receiptToolPath = (path) => new URL(path, window.location.href).href.replace(/\/$/, "");
 
@@ -788,19 +821,63 @@ const findReceiptDate = (text) => {
   return "";
 };
 
-const findReceiptMerchant = (lines) => {
-  const blocked = /(receipt|invoice|tax|sst|date|time|cashier|total|amount|member|tel|phone|address|company|reg|www|facebook|instagram|thank|welcome)/i;
+const cleanMerchantName = (line) =>
+  line
+    .replace(/[^A-Za-z0-9\u4e00-\u9fff &'().,@-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  return (
-    lines.find((line) => {
-      const clean = line.replace(/[^A-Za-z0-9\u4e00-\u9fff &'().-]/g, "").trim();
-      if (clean.length < 3 || clean.length > 42) return false;
-      if (blocked.test(clean)) return false;
-      if (!/[A-Za-z\u4e00-\u9fff]/.test(clean)) return false;
-      if ((clean.match(/\d/g) || []).length > clean.length / 2) return false;
-      return true;
-    }) || ""
-  );
+const findReceiptMerchant = (lines) => {
+  const blocked = /(receipt|invoice|tax|sst|gst|date|time|cashier|counter|total|amount|member|tel|phone|address|alamat|reg\s*no|company\s*no|co\.\s*no|www|facebook|instagram|thank|welcome|table|pax|qty|quantity)/i;
+  const companyWords = /(sdn\s*bhd|bhd|enterprise|trading|restaurant|restoran|cafe|kopitiam|mart|store|market|pharmacy|clinic|hotel|berhad|plc|llp|pte|ltd|有限公司|餐厅|餐廳|药房|藥房|酒店|超市|咖啡)/i;
+  const candidates = [];
+
+  lines.slice(0, 18).forEach((line, index) => {
+    const clean = cleanMerchantName(line);
+    if (clean.length < 3 || clean.length > 58) return;
+    if (blocked.test(clean)) return;
+    if (!/[A-Za-z\u4e00-\u9fff]/.test(clean)) return;
+    if ((clean.match(/\d/g) || []).length > clean.length / 2) return;
+    if (getAmountsFromLine(clean).length) return;
+
+    let score = 100 - index * 4;
+    if (companyWords.test(clean)) score += 50;
+    if (/^[A-Z0-9 &'().,@-]{5,}$/.test(clean)) score += 18;
+    if (clean.length >= 8 && clean.length <= 34) score += 12;
+    if (/[,.]/.test(clean)) score -= 8;
+    candidates.push({ clean, score });
+  });
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0]?.clean || "";
+};
+
+const findReceiptReference = (lines) => {
+  const labelWords = /(receipt|resit|invoice|inv|bill|order|transaction|trans|trx|ref|reference|payment|auth|approval|trace|rrn|terminal|tid|mid|batch|收据|收據|发票|發票|单号|單號|订单|訂單|交易|付款|参考|參考|号码|號碼|编号|編號|rujukan|bayaran)/i;
+  const blocked = /(total|amount|subtotal|tax|sst|gst|change|balance|date|time|tel|phone)/i;
+  const candidates = [];
+
+  lines.slice(0, 45).forEach((line, index) => {
+    if (!labelWords.test(line) || blocked.test(line)) return;
+    const normalized = line.replace(/\s+/g, " ").trim();
+    const matches = normalized.match(/[A-Z0-9][A-Z0-9\-/:]{4,}/gi) || [];
+
+    matches.forEach((raw) => {
+      const value = raw.replace(/^[#:\-]+|[#:\-]+$/g, "");
+      if (value.length < 5 || value.length > 32) return;
+      if (/^\d{1,2}[:/-]\d{1,2}/.test(value)) return;
+      if (/^\d+[.,]\d{2}$/.test(value)) return;
+
+      let score = 100 - index;
+      if (/(receipt|resit|invoice|inv|bill|order|ref|reference|transaction|trans|trx|收据|收據|发票|發票|单号|單號|交易|参考|參考|rujukan)/i.test(normalized)) score += 35;
+      if (/(payment|auth|approval|trace|rrn|terminal|付款|bayaran)/i.test(normalized)) score += 20;
+      if (/[A-Z]/i.test(value) && /\d/.test(value)) score += 10;
+      candidates.push({ value, score });
+    });
+  });
+
+  candidates.sort((a, b) => b.score - a.score || b.value.length - a.value.length);
+  return candidates[0]?.value || "";
 };
 
 const guessReceiptCategory = (text) => {
@@ -819,13 +896,17 @@ const guessReceiptCategory = (text) => {
   return match ? match[0] : "生活";
 };
 
-const applyReceiptResult = ({ amount, merchant, date, category }) => {
+const applyReceiptResult = ({ amount, merchant, reference, date, category }) => {
   const amountInput = document.querySelector(".entry-amount");
   const titleInput = document.querySelector(".entry-title");
+  const merchantInput = document.querySelector(".entry-merchant");
+  const referenceInput = document.querySelector(".entry-reference");
   const dateField = document.querySelector(".entry-date");
 
   if (amountInput && amount) amountInput.value = amount.toFixed(2);
-  if (titleInput && merchant) titleInput.value = merchant;
+  if (titleInput && merchant && !titleInput.value.trim()) titleInput.value = merchant;
+  if (merchantInput && merchant) merchantInput.value = merchant;
+  if (referenceInput && reference) referenceInput.value = reference;
   if (dateField && date) {
     dateField.value = date;
     const parts = getDateParts(date);
@@ -840,7 +921,7 @@ const applyReceiptResult = ({ amount, merchant, date, category }) => {
 };
 
 const resetReceiptPreview = () => {
-  pendingReceipt = { image: "", text: "" };
+  pendingReceipt = { image: "", text: "", autoSaved: false };
   if (receiptPreviewUrl) URL.revokeObjectURL(receiptPreviewUrl);
   receiptPreviewUrl = "";
   if (receiptImage) receiptImage.removeAttribute("src");
@@ -853,7 +934,7 @@ receiptInput?.addEventListener("change", async (event) => {
   if (!file) return;
   const currentJob = Date.now();
   receiptJob = currentJob;
-  pendingReceipt = { image: "", text: "" };
+  pendingReceipt = { image: "", text: "", autoSaved: false };
 
   if (receiptImage) {
     if (receiptPreviewUrl) URL.revokeObjectURL(receiptPreviewUrl);
@@ -879,6 +960,7 @@ receiptInput?.addEventListener("change", async (event) => {
     const result = {
       amount: findReceiptAmount(lines),
       merchant: findReceiptMerchant(lines),
+      reference: findReceiptReference(lines),
       date: findReceiptDate(text),
       category: guessReceiptCategory(text),
     };
@@ -888,11 +970,18 @@ receiptInput?.addEventListener("change", async (event) => {
     if (result.amount || result.merchant) {
       const details = [
         result.amount ? `金额 ${money(result.amount)}` : "",
-        result.merchant ? `内容 ${result.merchant}` : "",
+        result.merchant ? `公司 ${result.merchant}` : "",
+        result.reference ? `号码 ${result.reference}` : "",
       ].filter(Boolean);
 
-      setReceiptMessage("已自动填好", "请看一下 Grand Total 有没有读错，确认后按「新增消费」。");
-      setText(".form-note", `收据已读取：${details.join("，")}。`);
+      const shouldAutoSave = document.querySelector(".receipt-auto-save")?.checked && result.amount && result.merchant;
+      if (shouldAutoSave && !pendingReceipt.autoSaved) {
+        pendingReceipt.autoSaved = true;
+        saveExpenseFromForm({ auto: true });
+      } else {
+        setReceiptMessage("已自动填好", "请看一下 Grand Total 有没有读错，确认后按「新增消费」。");
+        setText(".form-note", `收据已读取：${details.join("，")}。`);
+      }
     } else {
       setReceiptMessage("照片已保存", "这张没读到 Grand Total，你可以手动填金额。");
       setText(".form-note", "我没有把握读对总金额，所以先不乱填；照片会跟着记录保存。");
@@ -992,6 +1081,15 @@ document.querySelectorAll(".source-choice").forEach((button) => {
   });
 });
 
+document.querySelectorAll(".nav-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.activeView = button.dataset.view || "dashboard";
+    saveState();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+});
+
 document.querySelector(".monthly-income-input")?.addEventListener("input", (event) => {
   const plan = getSelectedPlan();
   plan.incomeAmount = Number(event.target.value) || 0;
@@ -1047,27 +1145,31 @@ document.querySelector(".extra-income-form")?.addEventListener("submit", async (
   setText(".form-note", `已加入本月额外收入：${money(amount)}`);
 });
 
-document.querySelector(".entry-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
+function saveExpenseFromForm(options = {}) {
   const amountInput = document.querySelector(".entry-amount");
   const titleInput = document.querySelector(".entry-title");
+  const merchantInput = document.querySelector(".entry-merchant");
+  const referenceInput = document.querySelector(".entry-reference");
   const dateField = document.querySelector(".entry-date");
   const amount = Number(amountInput.value);
   const date = dateField.value || monthStart();
 
-  if (!amount) return;
+  if (!amount) return false;
 
   const parts = getDateParts(date);
   state.selectedYear = parts.year;
   state.selectedMonth = parts.month;
   ensurePlanFor(state, state.selectedYear);
 
-  const title = titleInput.value.trim() || state.selectedCategory;
+  const merchant = merchantInput.value.trim();
+  const reference = referenceInput.value.trim();
+  const title = titleInput.value.trim() || merchant || state.selectedCategory;
   const transaction = {
     id: Date.now(),
     type: "expense",
     title,
+    merchant,
+    reference,
     category: state.selectedCategory,
     source: state.selectedSource,
     amount,
@@ -1081,14 +1183,44 @@ document.querySelector(".entry-form")?.addEventListener("submit", async (event) 
 
   amountInput.value = "";
   titleInput.value = "";
+  merchantInput.value = "";
+  referenceInput.value = "";
   updateEntryDateForSelectedMonth();
   resetReceiptPreview();
-  setText(".form-note", `已新增：${title} ${money(amount)}`);
+  state.activeView = "records";
   saveState();
   render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  setText(".form-note", options.auto ? `已自动新增：${title} ${money(amount)}` : `已新增：${title} ${money(amount)}`);
+  return true;
+}
+
+document.querySelector(".entry-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveExpenseFromForm();
 });
 
 document.querySelector(".transaction-list")?.addEventListener("click", async (event) => {
+  const receiptButton = event.target.closest("[data-view-receipt]");
+  if (receiptButton) {
+    const item = state.transactions.find((transaction) => String(transaction.id) === receiptButton.dataset.viewReceipt);
+    if (item?.receiptImage) {
+      const modal = document.querySelector(".receipt-modal");
+      const image = document.querySelector(".receipt-modal-image");
+      const info = document.querySelector(".receipt-modal-info");
+      if (image) image.src = item.receiptImage;
+      if (info) {
+        info.innerHTML = `
+          <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
+          <p>${cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)} · ${money(item.amount)}</p>
+          ${item.reference ? `<p>付款/收据号：${cleanText(item.reference)}</p>` : ""}
+        `;
+      }
+      if (modal) modal.hidden = false;
+    }
+    return;
+  }
+
   const button = event.target.closest("[data-delete]");
   if (!button) return;
 
@@ -1097,6 +1229,17 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
   setText(".form-note", "已删除一笔消费记录。");
   saveState();
   render();
+});
+
+document.querySelector(".receipt-modal-close")?.addEventListener("click", () => {
+  const modal = document.querySelector(".receipt-modal");
+  if (modal) modal.hidden = true;
+});
+
+document.querySelector(".receipt-modal")?.addEventListener("click", (event) => {
+  if (event.target.classList.contains("receipt-modal")) {
+    event.currentTarget.hidden = true;
+  }
 });
 
 document.querySelector(".extra-income-list")?.addEventListener("click", async (event) => {
@@ -1132,13 +1275,15 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
-  const header = "日期,类型,来源,分类,内容,金额,有收据";
+  const header = "日期,类型,来源,分类,公司店名,付款收据号码,内容,金额,有收据";
   const rows = [...expenses(), ...incomeEntries()].map((item) =>
     [
       item.date,
       item.type === "income" ? "收入" : "消费",
       item.source,
       item.category,
+      item.merchant || "",
+      item.reference || "",
       item.title,
       item.amount,
       item.type === "expense" && item.receiptImage ? "有" : "无",

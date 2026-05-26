@@ -40,7 +40,7 @@
       </header>
 
       <main id="top">
-        <section class="app-titlebar">
+        <section class="app-titlebar" data-view-panel="dashboard">
           <div>
             <p class="eyebrow">自用账本</p>
             <h1 class="current-month-title">本月账本</h1>
@@ -62,7 +62,7 @@
           </div>
         </section>
 
-        <section class="overview-grid" aria-label="月度总览">
+        <section class="overview-grid" aria-label="月度总览" data-view-panel="dashboard">
           <article class="metric-card highlight">
             <span>本月储蓄</span>
             <strong class="saving-amount">RM 0.00</strong>
@@ -81,8 +81,8 @@
           </article>
         </section>
 
-        <section class="app-grid">
-          <section class="record-panel" aria-labelledby="record-title">
+        <section class="app-grid" data-view-container>
+          <section class="record-panel" aria-labelledby="record-title" data-view-panel="add">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">消费记录</p>
@@ -106,6 +106,16 @@
                 内容（可选）
                 <input class="entry-title" type="text" placeholder="例如 午餐、买菜、停车" />
               </label>
+              <div class="form-row">
+                <label>
+                  公司 / 店名
+                  <input class="entry-merchant" type="text" placeholder="拍收据会自动填写" />
+                </label>
+                <label>
+                  付款 / 收据号码
+                  <input class="entry-reference" type="text" placeholder="自动读取号码" />
+                </label>
+              </div>
 
               <div class="choice-block">
                 <span>钱从哪里来</span>
@@ -150,6 +160,10 @@
                     <p class="receipt-hint">请确认金额有没有读错，再按新增消费。</p>
                   </div>
                 </div>
+                <label class="auto-save-toggle">
+                  <input class="receipt-auto-save" type="checkbox" checked />
+                  读到金额和公司后自动新增
+                </label>
               </div>
 
               <div class="form-actions">
@@ -160,7 +174,7 @@
             </form>
           </section>
 
-          <section class="income-panel" aria-labelledby="income-title">
+          <section class="income-panel" aria-labelledby="income-title" data-view-panel="dashboard">
             <div class="panel-heading compact">
               <div>
                 <p class="eyebrow">自动收入</p>
@@ -236,8 +250,8 @@
           </section>
         </section>
 
-        <section class="secondary-grid">
-          <section class="ledger-panel" aria-labelledby="ledger-title">
+        <section class="secondary-grid" data-view-container>
+          <section class="ledger-panel" aria-labelledby="ledger-title" data-view-panel="records">
             <div class="panel-heading compact">
               <div>
                 <p class="eyebrow">本月记录</p>
@@ -248,7 +262,7 @@
             <div class="transaction-list"></div>
           </section>
 
-          <section class="report-panel" aria-labelledby="report-title">
+          <section class="report-panel" aria-labelledby="report-title" data-view-panel="reports">
             <div class="panel-heading compact">
               <div>
                 <p class="eyebrow">分类统计</p>
@@ -264,7 +278,7 @@
           </section>
         </section>
 
-        <section class="annual-panel" aria-labelledby="annual-title">
+        <section class="annual-panel" aria-labelledby="annual-title" data-view-panel="reports">
           <div class="panel-heading compact">
             <div>
               <p class="eyebrow">年度报表</p>
@@ -289,6 +303,21 @@
           <div class="annual-bars"></div>
         </section>
       </main>
+
+      <nav class="app-nav" aria-label="主要菜单">
+        <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
+        <button class="nav-button" type="button" data-view="add">新增</button>
+        <button class="nav-button" type="button" data-view="records">记录</button>
+        <button class="nav-button" type="button" data-view="reports">报表</button>
+      </nav>
+    </div>
+
+    <div class="receipt-modal" hidden>
+      <div class="receipt-modal-card">
+        <button class="receipt-modal-close" type="button">关闭</button>
+        <img class="receipt-modal-image" alt="收据照片" />
+        <div class="receipt-modal-info"></div>
+      </div>
     </div>
 
     <script src="vendor/tesseract/tesseract.min.js"></script>
