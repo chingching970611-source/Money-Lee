@@ -1,0 +1,21 @@
+{
+  "name": "xiaoqianben",
+  "version": "1.0.0",
+  "private": true,
+  "description": "小钱本手机应用",
+  "scripts": {
+    "prepare-mobile": "powershell -ExecutionPolicy Bypass -File scripts/prepare-mobile.ps1",
+    "sync": "npm run prepare-mobile && npx cap sync",
+    "open-android": "npm run sync && npx cap open android",
+    "open-ios": "npm run sync && npx cap open ios"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
+  }
+}

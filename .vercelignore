@@ -1,0 +1,15 @@
+preview-server.mjs
+start-xiaoqianben-app.bat
+sample-tng-import.csv
+product-roadmap.md
+INSTALL.md
+android
+ios
+node_modules
+www
+scripts
+package.json
+package-lock.json
+capacitor.config.json
+*.png
+!icons/*.png

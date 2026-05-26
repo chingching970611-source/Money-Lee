@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>小钱本 - 自用记账应用</title>
+    <meta
+      name="description"
+      content="小钱本是一个先给自己使用的简单记账应用，帮你快速记录收入、支出、预算和分类。"
+    />
+    <meta name="theme-color" content="#17211d" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="小钱本" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <a class="brand" href="#top" aria-label="小钱本首页">
+          <span class="brand-mark">账</span>
+          <span>小钱本</span>
+        </a>
+        <div class="header-actions">
+          <span class="today-label"></span>
+          <button class="install-button" type="button" hidden>安装应用</button>
+          <button class="export-button" type="button">导出记录</button>
+        </div>
+      </header>
+
+      <main id="top">
+        <section class="app-titlebar">
+          <div>
+            <p class="eyebrow">小钱本</p>
+            <h1>记账</h1>
+          </div>
+          <span class="saved-label">本机保存</span>
+        </section>
+
+        <section class="app-grid">
+          <section class="record-panel" aria-labelledby="record-title">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">快速新增</p>
+                <h2 id="record-title">记一笔</h2>
+              </div>
+              <div class="type-switch" aria-label="收入或支出">
+                <button class="type-button active" type="button" data-type="expense">支出</button>
+                <button class="type-button" type="button" data-type="income">收入</button>
+              </div>
+            </div>
+
+            <form class="entry-form">
+              <div class="form-row">
+                <label>
+                  金额
+                  <input class="entry-amount" type="number" min="0.1" step="0.1" placeholder="例如 12.90" required />
+                </label>
+                <label>
+                  日期
+                  <input class="entry-date" type="date" required />
+                </label>
+              </div>
+              <label>
+                内容
+                <input class="entry-title" type="text" placeholder="例如 午餐、打车、薪水" required />
+              </label>
+
+              <div class="receipt-box">
+                <div class="receipt-top">
+                  <div>
+                    <span>收据照片</span>
+                    <p>拍照或从相簿选图，系统会先把照片变清楚再读取。</p>
+                  </div>
+                  <label class="receipt-button">
+                    拍照 / 相簿
+                    <input class="receipt-input" type="file" accept="image/*" />
+                  </label>
+                </div>
+                <div class="receipt-preview" hidden>
+                  <img class="receipt-image" alt="收据预览" />
+                  <div>
+                    <strong class="receipt-status">已选择照片</strong>
+                    <p class="receipt-hint">照片会先自动调清楚，再读取金额和商家。</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="category-picker" role="radiogroup" aria-label="选择分类">
+                <button class="category-choice active" type="button" data-category="餐饮">餐饮</button>
+                <button class="category-choice" type="button" data-category="交通">交通</button>
+                <button class="category-choice" type="button" data-category="购物">购物</button>
+                <button class="category-choice" type="button" data-category="学习">学习</button>
+                <button class="category-choice" type="button" data-category="娱乐">娱乐</button>
+                <button class="category-choice" type="button" data-category="生活">生活</button>
+                <button class="category-choice income-only" type="button" data-category="薪水">薪水</button>
+                <button class="category-choice income-only" type="button" data-category="生意">生意</button>
+              </div>
+
+              <div class="form-actions">
+                <button class="submit-button" type="submit">新增记录</button>
+                <button class="reset-button" type="button">重设示例</button>
+              </div>
+              <p class="form-note" role="status"></p>
+            </form>
+          </section>
+
+          <section class="budget-panel" aria-labelledby="budget-title">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">本月预算</p>
+                <h2 id="budget-title">控制花费</h2>
+              </div>
+              <strong class="budget-status">健康</strong>
+            </div>
+
+            <div class="budget-ring" aria-label="预算使用比例">
+              <div>
+                <span>已用</span>
+                <strong class="used-percent">0%</strong>
+              </div>
+            </div>
+
+            <label class="budget-control">
+              预算上限
+              <input class="budget-slider" type="range" min="400" max="5000" step="50" value="1200" />
+              <span class="budget-amount">RM 1,200.00</span>
+            </label>
+
+            <div class="cashflow-box">
+              <span>收入 - 支出</span>
+              <strong class="cashflow-amount">RM 0.00</strong>
+            </div>
+          </section>
+        </section>
+
+        <section class="overview-grid" aria-label="本月总览">
+          <article class="metric-card highlight">
+            <span>本月剩余预算</span>
+            <strong class="remaining-amount">RM 0.00</strong>
+          </article>
+          <article class="metric-card">
+            <span>本月支出</span>
+            <strong class="spent-amount">RM 0.00</strong>
+          </article>
+          <article class="metric-card">
+            <span>本月收入</span>
+            <strong class="income-amount">RM 0.00</strong>
+          </article>
+          <article class="metric-card">
+            <span>记录数</span>
+            <strong class="entry-count">0 笔</strong>
+          </article>
+        </section>
+
+        <section class="secondary-grid">
+          <section class="ledger-panel" aria-labelledby="ledger-title">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">最近记录</p>
+                <h2 id="ledger-title">流水账</h2>
+              </div>
+              <span class="saved-label">自动保存在这台电脑</span>
+            </div>
+            <div class="transaction-list"></div>
+          </section>
+
+          <section class="report-panel" aria-labelledby="report-title">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">分类统计</p>
+                <h2 id="report-title">钱花在哪里</h2>
+              </div>
+              <button class="clear-button" type="button">清空全部</button>
+            </div>
+            <div class="category-report"></div>
+            <div class="insight-box">
+              <strong class="top-category">最大支出：餐饮</strong>
+              <p class="saving-tip">先保持简单：自己记录每天花在哪里，慢慢看出习惯。</p>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="vendor/tesseract/tesseract.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#17211d"/>
+  <rect x="74" y="74" width="364" height="364" rx="86" fill="#ffd84f"/>
+  <text x="256" y="330" text-anchor="middle" font-size="210" font-weight="800" font-family="Microsoft YaHei, Noto Sans SC, Arial, sans-serif" fill="#17211d">账</text>
+  <circle cx="373" cy="144" r="28" fill="#2d7d57"/>
+</svg>

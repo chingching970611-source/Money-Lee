@@ -1,0 +1,22 @@
+.vercel/
+node_modules/
+tools/
+www/
+
+# Generated mobile build files
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+ios/App/build/
+ios/App/DerivedData/
+
+# Local app packages and previews
+*.apk
+xiaoqianben-*.png
+*.log
+
+# Local secrets
+.env
+.env.local
+.env.*.local
