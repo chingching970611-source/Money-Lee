@@ -65,6 +65,7 @@ const defaultState = {
   selectedCategory: "餐饮",
   selectedSource: defaultMoneySource,
   selectedNeed: "必须",
+  selectedAffectsSaving: true,
   customSource: "",
   yearPlans: {
     [currentYear]: { ...defaultPlan },
@@ -174,6 +175,8 @@ const controlIconMap = {
   住宿: "bed",
   必须: "shield",
   想要: "sparkles",
+  扣我的储蓄: "wallet",
+  不扣储蓄: "shield",
 };
 
 const sourceColors = {
@@ -219,6 +222,11 @@ const decorateChoiceControls = () => {
     decorateButton(button, button.dataset.need, label);
   });
 
+  document.querySelectorAll(".saving-choice").forEach((button) => {
+    const label = button.dataset.label || button.textContent.trim();
+    decorateButton(button, label, label);
+  });
+
   document.querySelectorAll(".nav-button").forEach((button) => {
     const label = button.dataset.label || button.textContent.trim();
     decorateButton(button, button.dataset.view, label);
@@ -239,6 +247,12 @@ const splitSourceForForm = (value) => {
 };
 
 const normalizeNeedType = (value) => (needTypes.includes(value) ? value : "必须");
+
+const normalizeAffectsSaving = (value, fallback = true) => {
+  if (value === false || value === "false" || value === 0 || value === "0") return false;
+  if (value === true || value === "true" || value === 1 || value === "1") return true;
+  return fallback;
+};
 
 const normalizePlan = (plan = {}) => {
   const incomeAmount = Number(plan.incomeAmount ?? plan.income_amount ?? plan.income ?? defaultPlan.incomeAmount);
@@ -300,6 +314,10 @@ const normalizeExpense = (item, index) => {
     reference: String(item.reference || item.receiptNo || item.receipt_no || item.paymentNo || item.payment_no || "").trim(),
     remark: String(item.remark || item.note || item.notes || "").trim(),
     needType: normalizeNeedType(item.needType || item.need_type || item.need || item.priority),
+    affectsSaving: normalizeAffectsSaving(
+      item.affectsSaving ?? item.affects_saving,
+      !(item.excludeFromSaving || item.exclude_from_saving),
+    ),
     category,
     source,
     amount,
@@ -404,6 +422,7 @@ const migrateState = (saved) => {
   next.editingExpenseId = null;
   next.selectedCategory = expenseCategories.includes(next.selectedCategory) ? next.selectedCategory : "餐饮";
   next.selectedNeed = normalizeNeedType(next.selectedNeed);
+  next.selectedAffectsSaving = normalizeAffectsSaving(next.selectedAffectsSaving);
   const formSource = splitSourceForForm(next.selectedSource);
   next.selectedSource = formSource.selectedSource;
   next.customSource = String(next.customSource || formSource.customSource || "").trim();
@@ -514,23 +533,27 @@ const monthFixedExpenses = (year, month) =>
     type: "fixed-expense",
     isFixed: true,
     needType: "必须",
+    affectsSaving: true,
     remark: "",
     date: `${monthKey(year, month)}-01`,
   }));
 const selectedExpenses = () => expenses().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
 const selectedFixedExpenses = () => monthFixedExpenses(state.selectedYear, state.selectedMonth);
 const selectedSpendingItems = () => [...selectedExpenses(), ...selectedFixedExpenses()];
+const deductibleSpendingItems = (items = selectedSpendingItems()) => items.filter((item) => item.affectsSaving !== false);
 const selectedIncomeEntries = () =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
 const monthExpenses = (year, month) =>
   expenses().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
 const monthSpendingItems = (year, month) => [...monthExpenses(year, month), ...monthFixedExpenses(year, month)];
+const monthDeductibleSpendingItems = (year, month) => deductibleSpendingItems(monthSpendingItems(year, month));
 const monthIncomeEntries = (year, month) =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
 const total = (items) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 const selectedIncomeTotal = () => getSelectedPlan().incomeAmount + total(selectedIncomeEntries());
 const selectedSpendingTotal = () => total(selectedSpendingItems());
-const selectedSavingTotal = () => selectedIncomeTotal() - selectedSpendingTotal();
+const selectedDeductibleSpendingTotal = () => total(deductibleSpendingItems());
+const selectedSavingTotal = () => selectedIncomeTotal() - selectedDeductibleSpendingTotal();
 const coupleRequests = () => (Array.isArray(state.coupleRequests) ? state.coupleRequests : []);
 const pendingCoupleRequests = () => coupleRequests().filter((item) => item.status === "pending");
 
@@ -582,6 +605,10 @@ const updateSelectedButtons = () => {
 
   document.querySelectorAll(".need-choice").forEach((button) => {
     button.classList.toggle("active", button.dataset.need === state.selectedNeed);
+  });
+
+  document.querySelectorAll(".saving-choice").forEach((button) => {
+    button.classList.toggle("active", normalizeAffectsSaving(button.dataset.affectsSaving) === state.selectedAffectsSaving);
   });
 
   const customSourceField = document.querySelector(".custom-source-field");
@@ -744,9 +771,10 @@ const renderSummary = () => {
   const plan = getSelectedPlan();
   const spendingItems = selectedSpendingItems();
   const spent = total(spendingItems);
+  const deductibleSpent = selectedDeductibleSpendingTotal();
   const income = selectedIncomeTotal();
-  const saving = income - spent;
-  const usedPercent = plan.budget ? Math.min(Math.round((spent / plan.budget) * 100), 100) : 0;
+  const saving = income - deductibleSpent;
+  const usedPercent = plan.budget ? Math.min(Math.round((deductibleSpent / plan.budget) * 100), 100) : 0;
   const status = !plan.budget ? "未设定" : usedPercent > 95 ? "超支中" : usedPercent > 75 ? "要留意" : "健康";
 
   setText(".saving-amount", money(saving));
@@ -791,6 +819,7 @@ const renderTransactions = () => {
               <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
               <p>
                 <span class="need-pill ${item.needType === "想要" ? "want" : "must"}">${cleanText(item.needType || "必须")}</span>
+                ${item.affectsSaving === false ? '<span class="saving-pill">不扣储蓄</span>' : ""}
                 ${item.isFixed ? "每月固定" : cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}
               </p>
               ${item.isFixed ? '<p class="receipt-ref">每个月自动算进支出</p>' : ""}
@@ -965,11 +994,14 @@ const renderAnnualReport = () => {
   const annualExpense = months
     .filter((month) => month <= monthLimit)
     .reduce((sum, month) => sum + total(monthSpendingItems(state.selectedYear, month)), 0);
+  const annualDeductibleExpense = months
+    .filter((month) => month <= monthLimit)
+    .reduce((sum, month) => sum + total(monthDeductibleSpendingItems(state.selectedYear, month)), 0);
   const monthlyIncome = (month) => plan.incomeAmount + total(monthIncomeEntries(state.selectedYear, month));
   const annualIncome = months
     .filter((month) => month <= monthLimit)
     .reduce((sum, month) => sum + monthlyIncome(month), 0);
-  const annualSaving = annualIncome - annualExpense;
+  const annualSaving = annualIncome - annualDeductibleExpense;
   const biggest = Math.max(
     ...months.map((month) => monthlyIncome(month)),
     ...months.map((month) => total(monthSpendingItems(state.selectedYear, month))),
@@ -987,6 +1019,7 @@ const renderAnnualReport = () => {
   annualBars.innerHTML = visibleMonths
     .map((month) => {
       const spending = total(monthSpendingItems(state.selectedYear, month));
+      const deductibleSpending = total(monthDeductibleSpendingItems(state.selectedYear, month));
       const income = monthlyIncome(month);
       const incomeWidth = Math.max((income / biggest) * 100, income ? 4 : 0);
       const expenseWidth = Math.max((spending / biggest) * 100, spending ? 4 : 0);
@@ -1002,7 +1035,7 @@ const renderAnnualReport = () => {
               <span style="--bar-width: ${expenseWidth}%"></span>
             </div>
           </div>
-          <strong>${money(income - spending)}</strong>
+          <strong>${money(income - deductibleSpending)}</strong>
         </article>
       `;
     })
@@ -1545,6 +1578,14 @@ document.querySelectorAll(".need-choice").forEach((button) => {
   });
 });
 
+document.querySelectorAll(".saving-choice").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.selectedAffectsSaving = normalizeAffectsSaving(button.dataset.affectsSaving);
+    saveState();
+    render();
+  });
+});
+
 document.querySelector(".custom-source-input")?.addEventListener("input", (event) => {
   state.customSource = event.target.value;
   saveState();
@@ -1739,6 +1780,7 @@ function clearExpenseForm() {
   resetReceiptPreview();
   state.editingExpenseId = null;
   state.selectedNeed = "必须";
+  state.selectedAffectsSaving = true;
 }
 
 function fillExpenseForm(item) {
@@ -1751,6 +1793,7 @@ function fillExpenseForm(item) {
   if (dateInput) dateInput.value = item.date || monthStart();
   state.selectedCategory = expenseCategories.includes(item.category) ? item.category : "生活";
   state.selectedNeed = normalizeNeedType(item.needType);
+  state.selectedAffectsSaving = normalizeAffectsSaving(item.affectsSaving);
   const formSource = splitSourceForForm(item.source);
   state.selectedSource = formSource.selectedSource;
   state.customSource = formSource.customSource;
@@ -1822,6 +1865,7 @@ function saveExpenseFromForm(options = {}) {
     reference,
     remark,
     needType: normalizeNeedType(state.selectedNeed),
+    affectsSaving: normalizeAffectsSaving(state.selectedAffectsSaving),
     category: state.selectedCategory,
     source: getExpenseSourceFromForm(),
     amount,
@@ -1961,6 +2005,7 @@ document.querySelector(".couple-request-list")?.addEventListener("click", (event
       category: request.category,
       source: request.source,
       amount: request.amount,
+      affectsSaving: true,
       date: request.date,
       receiptText: "",
       receiptImage: "",
@@ -1999,7 +2044,7 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
-  const header = "日期,类型,来源,分类,必须想要,公司店名,Remark,金额,有收据";
+  const header = "日期,类型,来源,分类,必须想要,是否扣储蓄,公司店名,Remark,金额,有收据";
   const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) =>
     monthFixedExpenses(state.selectedYear, index + 1),
   ).flat();
@@ -2010,6 +2055,7 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
       item.source,
       item.category,
       item.needType || (item.type === "expense" ? "必须" : ""),
+      item.type === "income" ? "" : item.affectsSaving === false ? "不扣储蓄" : "扣储蓄",
       item.merchant || "",
       item.remark || "",
       item.amount,

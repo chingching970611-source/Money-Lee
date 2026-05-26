@@ -386,7 +386,8 @@ button:focus-visible {
 
 .source-picker,
 .category-picker,
-.need-picker {
+.need-picker,
+.saving-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -394,7 +395,8 @@ button:focus-visible {
 
 .source-choice,
 .category-choice,
-.need-choice {
+.need-choice,
+.saving-choice {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -443,7 +445,8 @@ button:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.need-choice {
+.need-choice,
+.saving-choice {
   justify-content: center;
   min-height: 48px;
 }
@@ -458,6 +461,22 @@ button:focus-visible {
   color: #773247;
   background: #ffd3de;
   border-color: #f19ab1;
+}
+
+.saving-picker {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.saving-choice.include.active {
+  color: #163f2c;
+  background: #dff4df;
+  border-color: #a6d7b1;
+}
+
+.saving-choice.exclude.active {
+  color: #79521e;
+  background: #ffe7b0;
+  border-color: #efbf5b;
 }
 
 .custom-source-field {
@@ -1056,6 +1075,19 @@ button:focus-visible {
   background: #ffe1ea;
 }
 
+.saving-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-right: 6px;
+  padding: 2px 8px;
+  color: #79521e;
+  background: #fff0c7;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .auto-save-toggle {
   display: flex;
   align-items: center;
@@ -1471,14 +1503,16 @@ button:focus-visible {
 
   .source-picker,
   .category-picker,
-  .need-picker {
+  .need-picker,
+  .saving-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
   .source-choice,
   .category-choice,
-  .need-choice {
+  .need-choice,
+  .saving-choice {
     min-height: 54px;
     padding: 8px 9px;
     background: #fffaf2;
