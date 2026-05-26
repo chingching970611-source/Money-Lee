@@ -17,7 +17,8 @@ const categoryColors = {
 const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "健康", "住宿"];
 const moneySources = ["电子钱包", "银行户口", "银行扣账", "现金", "其他"];
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
-const defaultPlan = { incomeAmount: 2600, incomeSource: "薪水", budget: 1200 };
+const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
+const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
 const now = new Date();
 const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const currentYear = now.getFullYear();
@@ -60,44 +61,8 @@ const defaultState = {
   yearPlans: {
     [currentYear]: { ...defaultPlan },
   },
-  transactions: [
-    {
-      id: 1,
-      type: "expense",
-      title: "午餐",
-      category: "餐饮",
-      source: "电子钱包",
-      amount: 12.9,
-      date: today,
-      receiptText: "",
-      receiptImage: "",
-      createdAt: now.toISOString(),
-    },
-    {
-      id: 2,
-      type: "expense",
-      title: "打车",
-      category: "交通",
-      source: "银行扣账",
-      amount: 18.4,
-      date: today,
-      receiptText: "",
-      receiptImage: "",
-      createdAt: now.toISOString(),
-    },
-    {
-      id: 3,
-      type: "expense",
-      title: "课程资料",
-      category: "学习",
-      source: "银行户口",
-      amount: 5.5,
-      date: today,
-      receiptText: "",
-      receiptImage: "",
-      createdAt: now.toISOString(),
-    },
-  ],
+  transactions: [],
+  incomeEntries: [],
 };
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -132,7 +97,7 @@ const normalizePlan = (plan = {}) => {
   return {
     incomeAmount: Number.isFinite(incomeAmount) && incomeAmount >= 0 ? incomeAmount : defaultPlan.incomeAmount,
     incomeSource,
-    budget: Number.isFinite(budget) && budget > 0 ? budget : defaultPlan.budget,
+    budget: Number.isFinite(budget) && budget >= 0 ? budget : defaultPlan.budget,
   };
 };
 
@@ -190,6 +155,40 @@ const normalizeExpense = (item, index) => {
   };
 };
 
+const normalizeIncomeEntry = (item, index) => {
+  const amount = Number(item.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const source = extraIncomeSources.includes(item.source || item.moneySource || item.money_source || item.category)
+    ? item.source || item.moneySource || item.money_source || item.category
+    : "Commission";
+
+  return {
+    id: item.id ?? Date.now() + index,
+    type: "income",
+    title: String(item.title || item.name || source).trim() || source,
+    source,
+    category: source,
+    amount,
+    date: item.date || item.transaction_date || today,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+  };
+};
+
+const isDefaultSampleExpense = (item) => {
+  const title = String(item?.title || "");
+  const amount = Number(item?.amount);
+  const category = String(item?.category || "");
+  return (
+    (title === "午餐" && category === "餐饮" && amount === 12.9) ||
+    (title === "打车" && category === "交通" && amount === 18.4) ||
+    (title === "课程资料" && category === "学习" && amount === 5.5)
+  );
+};
+
+const isDefaultSampleIncome = (item) =>
+  item?.type === "income" && String(item.title || "") === "薪水" && Number(item.amount) === 2600;
+
 const migrateState = (saved) => {
   const next = { ...clone(defaultState), ...(saved || {}) };
   next.selectedYear = Number(next.selectedYear) || currentYear;
@@ -214,27 +213,52 @@ const migrateState = (saved) => {
   }
 
   const incomeByYear = {};
-  const rawTransactions = Array.isArray(saved?.transactions) ? saved.transactions : clone(defaultState.transactions);
+  const rawTransactions = Array.isArray(saved?.transactions) ? saved.transactions : [];
+  const onlyDefaultSamples =
+    rawTransactions.length > 0 &&
+    rawTransactions.every((item) => isDefaultSampleExpense(item) || isDefaultSampleIncome(item));
+  const hasRealSavedData =
+    rawTransactions.some((item) => !isDefaultSampleExpense(item) && !isDefaultSampleIncome(item)) ||
+    (Array.isArray(saved?.incomeEntries) && saved.incomeEntries.length > 0);
+  const currentSavedPlan = next.yearPlans[String(currentYear)];
+  const hasOldDefaultPlan =
+    currentSavedPlan &&
+    [0, 2600].includes(Number(currentSavedPlan.incomeAmount)) &&
+    Number(currentSavedPlan.budget) === 1200;
+
+  if (!hasRealSavedData && hasOldDefaultPlan) {
+    next.yearPlans = { [currentYear]: normalizePlan() };
+  }
+
   next.transactions = rawTransactions
     .map((item, index) => {
       if (item?.type === "income") {
-        const { year } = getDateParts(item.date || today);
-        incomeByYear[year] = (incomeByYear[year] || 0) + Number(item.amount || 0);
         return null;
       }
 
+      if (onlyDefaultSamples && isDefaultSampleExpense(item)) return null;
       return normalizeExpense(item, index);
     })
     .filter(Boolean);
 
+  const oldIncomeEntries = rawTransactions
+    .map((item, index) => {
+      if (item?.type !== "income" || (onlyDefaultSamples && isDefaultSampleIncome(item))) return null;
+      const { year } = getDateParts(item.date || today);
+      incomeByYear[year] = (incomeByYear[year] || 0) + Number(item.amount || 0);
+      return normalizeIncomeEntry(item, index);
+    })
+    .filter(Boolean);
+
+  next.incomeEntries = [
+    ...(Array.isArray(saved?.incomeEntries) ? saved.incomeEntries : []),
+    ...oldIncomeEntries,
+  ]
+    .map(normalizeIncomeEntry)
+    .filter(Boolean);
+
   Object.entries(incomeByYear).forEach(([year, amount]) => {
-    if (amount > 0 && !next.yearPlans[year]) {
-      next.yearPlans[year] = normalizePlan({
-        incomeAmount: amount,
-        incomeSource: "薪水",
-        budget: saved?.budget || defaultPlan.budget,
-      });
-    }
+    if (amount > 0 && !next.yearPlans[year]) next.yearPlans[year] = normalizePlan();
   });
 
   ensurePlanFor(next, next.selectedYear);
@@ -261,10 +285,16 @@ const isCloudId = (id) => uuidPattern.test(String(id));
 
 const getSelectedPlan = () => ensurePlanFor(state, state.selectedYear);
 const expenses = () => state.transactions.filter((item) => item.type === "expense");
+const incomeEntries = () => (Array.isArray(state.incomeEntries) ? state.incomeEntries : []);
 const selectedExpenses = () => expenses().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
+const selectedIncomeEntries = () =>
+  incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
 const monthExpenses = (year, month) =>
   expenses().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
+const monthIncomeEntries = (year, month) =>
+  incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
 const total = (items) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+const selectedIncomeTotal = () => getSelectedPlan().incomeAmount + total(selectedIncomeEntries());
 
 const getCategoryTotals = (items = selectedExpenses()) =>
   items.reduce((totals, item) => {
@@ -332,27 +362,28 @@ const renderPlanControls = () => {
   const plan = getSelectedPlan();
   const incomeInput = document.querySelector(".monthly-income-input");
   const sourceSelect = document.querySelector(".income-source-select");
-  const budgetSlider = document.querySelector(".budget-slider");
+  const budgetInput = document.querySelector(".budget-input");
 
   if (incomeInput && document.activeElement !== incomeInput) incomeInput.value = plan.incomeAmount || "";
   if (sourceSelect) sourceSelect.value = plan.incomeSource;
-  if (budgetSlider) budgetSlider.value = plan.budget;
-  setText(".budget-amount", money(plan.budget));
+  if (budgetInput && document.activeElement !== budgetInput) budgetInput.value = plan.budget || "";
+  setText(".budget-amount", plan.budget ? money(plan.budget) : "未设定");
   setText(".plan-note", `这个设定会自动用在 ${state.selectedYear} 年每个月。`);
 };
 
 const renderSummary = () => {
   const plan = getSelectedPlan();
   const spent = total(selectedExpenses());
-  const income = plan.incomeAmount;
+  const income = selectedIncomeTotal();
   const saving = income - spent;
   const usedPercent = plan.budget ? Math.min(Math.round((spent / plan.budget) * 100), 100) : 0;
-  const status = usedPercent > 95 ? "超支中" : usedPercent > 75 ? "要留意" : "健康";
+  const status = !plan.budget ? "未设定" : usedPercent > 95 ? "超支中" : usedPercent > 75 ? "要留意" : "健康";
 
   setText(".saving-amount", money(saving));
   setText(".spent-amount", money(spent));
   setText(".income-amount", money(income));
   setText(".entry-count", `${selectedExpenses().length} 笔`);
+  setText(".extra-income-total", money(total(selectedIncomeEntries())));
   setText(".used-percent", `${usedPercent}%`);
   setText(".budget-status", status);
 
@@ -393,6 +424,36 @@ const renderTransactions = () => {
           <div class="amount-group">
             <span class="transaction-amount">-${money(item.amount)}</span>
             <button class="delete-button" type="button" data-delete="${cleanText(item.id)}" aria-label="删除 ${cleanText(item.title)}">删</button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+};
+
+const renderIncomeEntries = () => {
+  const list = document.querySelector(".extra-income-list");
+  if (!list) return;
+
+  const items = selectedIncomeEntries();
+  if (!items.length) {
+    list.innerHTML = '<div class="mini-empty">这个月还没有额外收入。</div>';
+    return;
+  }
+
+  list.innerHTML = items
+    .slice()
+    .sort((a, b) => new Date(`${b.date}T00:00:00`) - new Date(`${a.date}T00:00:00`))
+    .map(
+      (item) => `
+        <article class="income-entry-row">
+          <div>
+            <strong>${cleanText(item.title || item.source)}</strong>
+            <p>${cleanText(item.date)} · ${cleanText(item.source)}</p>
+          </div>
+          <div class="amount-group">
+            <span class="income-entry-amount">+${money(item.amount)}</span>
+            <button class="delete-button" type="button" data-delete-income="${cleanText(item.id)}" aria-label="删除 ${cleanText(item.title)}">删</button>
           </div>
         </article>
       `,
@@ -451,10 +512,13 @@ const renderAnnualReport = () => {
   const annualExpense = months
     .filter((month) => month <= monthLimit)
     .reduce((sum, month) => sum + total(monthExpenses(state.selectedYear, month)), 0);
-  const annualIncome = plan.incomeAmount * monthLimit;
+  const monthlyIncome = (month) => plan.incomeAmount + total(monthIncomeEntries(state.selectedYear, month));
+  const annualIncome = months
+    .filter((month) => month <= monthLimit)
+    .reduce((sum, month) => sum + monthlyIncome(month), 0);
   const annualSaving = annualIncome - annualExpense;
   const biggest = Math.max(
-    plan.incomeAmount,
+    ...months.map((month) => monthlyIncome(month)),
     ...months.map((month) => total(monthExpenses(state.selectedYear, month))),
     1,
   );
@@ -470,8 +534,9 @@ const renderAnnualReport = () => {
   annualBars.innerHTML = months
     .map((month) => {
       const expense = total(monthExpenses(state.selectedYear, month));
+      const income = monthlyIncome(month);
       const muted = month > monthLimit;
-      const incomeWidth = Math.max((plan.incomeAmount / biggest) * 100, plan.incomeAmount ? 4 : 0);
+      const incomeWidth = Math.max((income / biggest) * 100, income ? 4 : 0);
       const expenseWidth = Math.max((expense / biggest) * 100, expense ? 4 : 0);
 
       return `
@@ -485,7 +550,7 @@ const renderAnnualReport = () => {
               <span style="--bar-width: ${expenseWidth}%"></span>
             </div>
           </div>
-          <strong>${muted ? "未到" : money(plan.incomeAmount - expense)}</strong>
+          <strong>${muted ? "未到" : money(income - expense)}</strong>
         </article>
       `;
     })
@@ -499,6 +564,7 @@ const render = () => {
   renderPlanControls();
   renderSummary();
   renderTransactions();
+  renderIncomeEntries();
   renderReport();
   renderAnnualReport();
 };
@@ -529,19 +595,20 @@ const updateCloudUi = () => {
 
 const toCloudTransaction = (item) => ({
   user_id: cloudUser.id,
-  type: "expense",
+  type: item.type || "expense",
   title: item.title,
-  category: item.category,
+  category: item.category || item.source || "其他",
   amount: item.amount,
   transaction_date: item.date || today,
-  money_source: item.source || "电子钱包",
+  money_source: item.source || "其他",
   receipt_text: item.receiptText || null,
   receipt_image: item.receiptImage || null,
 });
 
-const fromCloudTransaction = (row) =>
-  normalizeExpense({
+const fromCloudTransaction = (row) => {
+  const item = {
     id: row.id,
+    type: row.type,
     title: row.title,
     category: row.category,
     amount: Number(row.amount),
@@ -550,7 +617,10 @@ const fromCloudTransaction = (row) =>
     receipt_text: row.receipt_text,
     receipt_image: row.receipt_image,
     created_at: row.created_at,
-  });
+  };
+
+  return row.type === "income" ? normalizeIncomeEntry(item, 0) : normalizeExpense(item, 0);
+};
 
 const saveTransactionToCloud = async (item) => {
   if (!cloudClient || !cloudUser) return null;
@@ -612,7 +682,9 @@ const schedulePlanSync = () => {
 const uploadLocalTransactions = async () => {
   if (!cloudClient || !cloudUser) return;
 
-  for (const item of state.transactions) {
+  const localItems = [...state.transactions, ...incomeEntries()];
+
+  for (const item of localItems) {
     if (isCloudId(item.id)) continue;
     const cloudId = await saveTransactionToCloud(item);
     if (cloudId) item.id = cloudId;
@@ -626,12 +698,13 @@ const loadTransactionsFromCloud = async () => {
     .from("transactions")
     .select("*")
     .eq("user_id", cloudUser.id)
-    .eq("type", "expense")
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  state.transactions = (data || []).map(fromCloudTransaction).filter(Boolean);
+  const rows = (data || []).map(fromCloudTransaction).filter(Boolean);
+  state.transactions = rows.filter((item) => item.type === "expense");
+  state.incomeEntries = rows.filter((item) => item.type === "income");
 };
 
 const syncCloud = async (message = "云端同步完成。") => {
@@ -1107,13 +1180,54 @@ document.querySelector(".income-source-select")?.addEventListener("change", (eve
   schedulePlanSync();
 });
 
-document.querySelector(".budget-slider")?.addEventListener("input", (event) => {
+document.querySelector(".budget-input")?.addEventListener("input", (event) => {
   const plan = getSelectedPlan();
-  plan.budget = Number(event.target.value) || defaultPlan.budget;
+  plan.budget = Number(event.target.value) || 0;
   saveState();
   renderPlanControls();
   renderSummary();
   schedulePlanSync();
+});
+
+document.querySelector(".extra-income-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const amountInput = document.querySelector(".extra-income-amount");
+  const sourceInput = document.querySelector(".extra-income-source");
+  const titleInput = document.querySelector(".extra-income-title");
+  const amount = Number(amountInput.value);
+  if (!amount) return;
+
+  const source = extraIncomeSources.includes(sourceInput.value) ? sourceInput.value : "Commission";
+  const entry = {
+    id: Date.now(),
+    type: "income",
+    title: titleInput.value.trim() || source,
+    source,
+    category: source,
+    amount,
+    date: monthStart(),
+    createdAt: new Date().toISOString(),
+  };
+
+  state.incomeEntries.push(entry);
+  amountInput.value = "";
+  titleInput.value = "";
+  saveState();
+  render();
+  setText(".form-note", `已加入本月额外收入：${money(amount)}`);
+
+  try {
+    const cloudId = await saveTransactionToCloud(entry);
+    if (cloudId) {
+      entry.id = cloudId;
+      saveState();
+      render();
+      setCloudStatus("已连接", "这笔额外收入已同步到 Supabase。", true);
+    }
+  } catch {
+    setCloudStatus("同步失败", "这笔额外收入先保存在本机；Supabase 准备好后可按立即同步。");
+  }
 });
 
 document.querySelector(".sync-login-button")?.addEventListener("click", async () => {
@@ -1221,6 +1335,22 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
   }
 });
 
+document.querySelector(".extra-income-list")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-delete-income]");
+  if (!button) return;
+
+  const id = button.dataset.deleteIncome;
+  state.incomeEntries = incomeEntries().filter((item) => String(item.id) !== id);
+  saveState();
+  render();
+  setText(".form-note", "已删除一笔额外收入。");
+
+  if (cloudClient && cloudUser && isCloudId(id)) {
+    const { error } = await cloudClient.from("transactions").delete().eq("id", id).eq("user_id", cloudUser.id);
+    if (error) setCloudStatus("云端删除失败", "本机已删除，云端稍后可按立即同步再整理。");
+  }
+});
+
 document.querySelector(".reset-button")?.addEventListener("click", () => {
   state = clone(defaultState);
   saveState();
@@ -1253,15 +1383,16 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
-  const header = "日期,来源,分类,内容,金额,有收据";
-  const rows = expenses().map((item) =>
+  const header = "日期,类型,来源,分类,内容,金额,有收据";
+  const rows = [...expenses(), ...incomeEntries()].map((item) =>
     [
       item.date,
+      item.type === "income" ? "收入" : "消费",
       item.source,
       item.category,
       item.title,
       item.amount,
-      item.receiptImage ? "有" : "无",
+      item.type === "expense" && item.receiptImage ? "有" : "无",
     ]
       .map((value) => `"${String(value).replaceAll('"', '""')}"`)
       .join(","),

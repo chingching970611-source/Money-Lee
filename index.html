@@ -172,7 +172,7 @@
             <div class="income-form">
               <label>
                 每个月会收入多少
-                <input class="monthly-income-input" type="number" min="0" step="50" placeholder="例如 2600" />
+                <input class="monthly-income-input" type="number" min="0" step="50" placeholder="自己填写，例如 2600" />
               </label>
               <label>
                 钱的来源
@@ -187,10 +187,39 @@
               </label>
               <label class="budget-control">
                 每月消费预算
-                <input class="budget-slider" type="range" min="300" max="8000" step="50" value="1200" />
-                <span class="budget-amount">RM 1,200.00</span>
+                <input class="budget-input" type="number" min="0" step="50" placeholder="可不填" />
+                <span class="budget-amount">未设定</span>
               </label>
             </div>
+
+            <form class="extra-income-form">
+              <div class="mini-heading">
+                <strong>本月额外收入</strong>
+                <span class="extra-income-total">RM 0.00</span>
+              </div>
+              <div class="extra-income-grid">
+                <label>
+                  金额
+                  <input class="extra-income-amount" type="number" min="0.1" step="0.1" placeholder="例如 350" />
+                </label>
+                <label>
+                  来源
+                  <select class="extra-income-source">
+                    <option value="Commission">Commission</option>
+                    <option value="奖金">奖金</option>
+                    <option value="兼职">兼职</option>
+                    <option value="生意">生意</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                内容（可选）
+                <input class="extra-income-title" type="text" placeholder="例如 五月 commission" />
+              </label>
+              <button class="extra-income-button" type="submit">加入本月收入</button>
+              <div class="extra-income-list"></div>
+            </form>
 
             <div class="budget-status-box">
               <div class="budget-ring" aria-label="预算使用比例">
