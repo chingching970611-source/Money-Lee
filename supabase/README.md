@@ -14,6 +14,7 @@
 1. 去 Supabase 建一个新 project。
 2. 打开 Supabase 的 SQL Editor。
 3. 把 `schema.sql` 的内容贴进去运行。
-4. 回到小钱本，我再帮你接登录和同步。
+4. 或者在 GitHub 连接 Supabase migration，用 `migrations/202605260001_initial_schema.sql`。
+5. 回到小钱本，我再帮你接登录和同步。
 
 不要把 Supabase 的密码或 secret key 放进 GitHub。之后 app 只会用 public anon key。
