@@ -207,6 +207,7 @@ h2 {
 
 .metric-card,
 .record-panel,
+.sync-panel,
 .budget-panel,
 .ledger-panel,
 .report-panel {
@@ -255,6 +256,7 @@ h2 {
 }
 
 .record-panel,
+.sync-panel,
 .budget-panel,
 .ledger-panel,
 .report-panel {
@@ -496,6 +498,84 @@ h2 {
   font-size: 1.45rem;
 }
 
+.sync-panel {
+  margin-top: 14px;
+}
+
+.sync-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(280px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.sync-grid label {
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.sync-grid input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sync-login-button,
+.sync-now-button,
+.sync-logout-button {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.sync-now-button {
+  background: var(--green);
+}
+
+.sync-logout-button {
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.cloud-status {
+  padding: 8px 12px;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.cloud-status.connected {
+  color: #1f5a3d;
+  background: var(--mint);
+  border-color: var(--mint);
+}
+
+.sync-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+  font-weight: 800;
+}
+
 .transaction-list,
 .category-report {
   display: grid;
@@ -633,6 +713,7 @@ h2 {
   }
 
   .record-panel,
+  .sync-panel,
   .ledger-panel {
     grid-column: auto;
     grid-row: auto;
@@ -658,10 +739,15 @@ h2 {
   }
 
   .record-panel,
+  .sync-panel,
   .budget-panel,
   .ledger-panel,
   .report-panel {
     padding: 16px;
+  }
+
+  .sync-grid {
+    grid-template-columns: 1fr;
   }
 
   .panel-heading,

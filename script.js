@@ -17,6 +17,25 @@ const categoryColors = {
 const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活"];
 const incomeCategories = ["薪水", "生意"];
 const today = new Date().toISOString().slice(0, 10);
+const supabaseUrl = "https://suzlxzjqgqcvdxpiiokk.supabase.co";
+const supabaseAnonKey = "";
+const hasSupabaseConfig = Boolean(
+  supabaseUrl &&
+    supabaseAnonKey &&
+    !supabaseAnonKey.includes("PASTE") &&
+    window.supabase?.createClient,
+);
+const cloudClient = hasSupabaseConfig
+  ? window.supabase.createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
+  : null;
+let cloudUser = null;
+let cloudBusy = false;
 
 const defaultState = {
   budget: 1200,
@@ -60,6 +79,22 @@ const cleanText = (value) =>
 const setText = (selector, value) => {
   const element = document.querySelector(selector);
   if (element) element.textContent = value;
+};
+
+const setHidden = (selector, hidden) => {
+  const element = document.querySelector(selector);
+  if (element) element.hidden = hidden;
+};
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isCloudId = (id) => uuidPattern.test(String(id));
+const monthStart = () => `${today.slice(0, 7)}-01`;
+
+const setCloudStatus = (status, note, connected = false) => {
+  setText(".cloud-status", status);
+  setText(".sync-note", note);
+  const badge = document.querySelector(".cloud-status");
+  if (badge) badge.classList.toggle("connected", connected);
 };
 
 const expenses = () => state.transactions.filter((item) => item.type === "expense");
@@ -125,9 +160,11 @@ const renderTransactions = () => {
     return;
   }
 
+  const sortValue = (item) => new Date(`${item.date || today}T00:00:00`).getTime() || Number(item.id) || 0;
+
   list.innerHTML = state.transactions
     .slice()
-    .sort((a, b) => b.id - a.id)
+    .sort((a, b) => sortValue(b) - sortValue(a))
     .map((item) => {
       const isIncome = item.type === "income";
       const sign = isIncome ? "+" : "-";
@@ -197,6 +234,157 @@ const render = () => {
   renderSummary();
   renderTransactions();
   renderReport();
+};
+
+const updateCloudUi = () => {
+  if (!cloudClient) {
+    setCloudStatus("未连接", "Supabase 还差 anon public key；本机记录照常可用。");
+    setHidden(".sync-now-button", true);
+    setHidden(".sync-logout-button", true);
+    setHidden(".sync-login-button", false);
+    return;
+  }
+
+  if (cloudUser) {
+    const emailInput = document.querySelector(".sync-email");
+    if (emailInput) emailInput.value = cloudUser.email || "";
+    setCloudStatus("已连接", `已登入 ${cloudUser.email || "Supabase"}，新记录会同步到云端。`, true);
+    setHidden(".sync-login-button", true);
+    setHidden(".sync-now-button", false);
+    setHidden(".sync-logout-button", false);
+  } else {
+    setCloudStatus("本机保存", "输入 email 后会收到登入链接，登入后才同步到 Supabase。");
+    setHidden(".sync-login-button", false);
+    setHidden(".sync-now-button", true);
+    setHidden(".sync-logout-button", true);
+  }
+};
+
+const toCloudTransaction = (item) => ({
+  user_id: cloudUser.id,
+  type: item.type,
+  title: item.title,
+  category: item.category,
+  amount: item.amount,
+  transaction_date: item.date || today,
+  receipt_text: item.receiptText || null,
+});
+
+const fromCloudTransaction = (row) => ({
+  id: row.id,
+  type: row.type,
+  title: row.title,
+  category: row.category,
+  amount: Number(row.amount),
+  date: row.transaction_date,
+  receiptText: row.receipt_text || "",
+});
+
+const saveTransactionToCloud = async (item) => {
+  if (!cloudClient || !cloudUser) return null;
+
+  const { data, error } = await cloudClient
+    .from("transactions")
+    .insert(toCloudTransaction(item))
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id;
+};
+
+const syncBudgetToCloud = async () => {
+  if (!cloudClient || !cloudUser) return;
+
+  const { error } = await cloudClient.from("monthly_settings").upsert(
+    {
+      user_id: cloudUser.id,
+      month_start: monthStart(),
+      budget: state.budget,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,month_start" },
+  );
+
+  if (error) throw error;
+};
+
+const loadBudgetFromCloud = async () => {
+  if (!cloudClient || !cloudUser) return;
+
+  const { data, error } = await cloudClient
+    .from("monthly_settings")
+    .select("budget")
+    .eq("user_id", cloudUser.id)
+    .eq("month_start", monthStart())
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data?.budget) state.budget = Number(data.budget);
+};
+
+const uploadLocalTransactions = async () => {
+  if (!cloudClient || !cloudUser) return;
+
+  for (const item of state.transactions) {
+    if (isCloudId(item.id)) continue;
+    const cloudId = await saveTransactionToCloud(item);
+    if (cloudId) item.id = cloudId;
+  }
+};
+
+const loadTransactionsFromCloud = async () => {
+  if (!cloudClient || !cloudUser) return;
+
+  const { data, error } = await cloudClient
+    .from("transactions")
+    .select("*")
+    .eq("user_id", cloudUser.id)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  state.transactions = (data || []).map(fromCloudTransaction);
+};
+
+const syncCloud = async (message = "云端同步完成。") => {
+  if (!cloudClient || !cloudUser || cloudBusy) return;
+
+  cloudBusy = true;
+  setCloudStatus("同步中", "正在把本机记录和 Supabase 对齐。", true);
+
+  try {
+    await uploadLocalTransactions();
+    await syncBudgetToCloud();
+    await loadBudgetFromCloud();
+    await loadTransactionsFromCloud();
+    saveState();
+    render();
+    setCloudStatus("已连接", message, true);
+  } catch {
+    setCloudStatus("同步失败", "Supabase 还没准备好，或资料表还没建立。本机记录没有丢。");
+  } finally {
+    cloudBusy = false;
+  }
+};
+
+const initCloud = async () => {
+  updateCloudUi();
+  if (!cloudClient) return;
+
+  const {
+    data: { session },
+  } = await cloudClient.auth.getSession();
+
+  cloudUser = session?.user || null;
+  updateCloudUi();
+  if (cloudUser) await syncCloud("已和 Supabase 同步。");
+
+  cloudClient.auth.onAuthStateChange(async (_event, session) => {
+    cloudUser = session?.user || null;
+    updateCloudUi();
+    if (cloudUser) await syncCloud("已登入并同步到 Supabase。");
+  });
 };
 
 document.querySelector(".today-label").textContent = new Date().toLocaleDateString("zh-MY", {
@@ -545,13 +733,49 @@ document.querySelectorAll(".category-choice").forEach((button) => {
   });
 });
 
+document.querySelector(".sync-login-button")?.addEventListener("click", async () => {
+  if (!cloudClient) {
+    setCloudStatus("未连接", "请先加入 Supabase anon public key，我就能帮你开启云端同步。");
+    return;
+  }
+
+  const email = document.querySelector(".sync-email")?.value.trim();
+  if (!email) {
+    setCloudStatus("需要 email", "输入你的 email 后，我会发送 Supabase 登入链接。");
+    return;
+  }
+
+  const { error } = await cloudClient.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.href.split("#")[0],
+    },
+  });
+
+  if (error) {
+    setCloudStatus("发送失败", "Supabase 暂时不能发送登入链接，请检查 email 或稍后再试。");
+  } else {
+    setCloudStatus("已发送", "请去 email 点登入链接，回来后会自动同步。");
+  }
+});
+
+document.querySelector(".sync-now-button")?.addEventListener("click", async () => {
+  await syncCloud("云端同步完成。");
+});
+
+document.querySelector(".sync-logout-button")?.addEventListener("click", async () => {
+  if (cloudClient) await cloudClient.auth.signOut();
+  cloudUser = null;
+  updateCloudUi();
+});
+
 document.querySelector(".budget-slider")?.addEventListener("input", (event) => {
   state.budget = Number(event.target.value);
   saveState();
   render();
 });
 
-document.querySelector(".entry-form")?.addEventListener("submit", (event) => {
+document.querySelector(".entry-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const amountInput = document.querySelector(".entry-amount");
@@ -562,14 +786,16 @@ document.querySelector(".entry-form")?.addEventListener("submit", (event) => {
 
   if (!amount || !title) return;
 
-  state.transactions.push({
+  const transaction = {
     id: Date.now(),
     type: state.mode,
     title,
     category: state.selectedCategory,
     amount,
     date: dateField.value || today,
-  });
+  };
+
+  state.transactions.push(transaction);
 
   amountInput.value = "";
   titleInput.value = "";
@@ -577,17 +803,34 @@ document.querySelector(".entry-form")?.addEventListener("submit", (event) => {
   setText(".form-note", `已新增：${title} ${money(amount)}`);
   saveState();
   render();
+
+  try {
+    const cloudId = await saveTransactionToCloud(transaction);
+    if (cloudId) {
+      transaction.id = cloudId;
+      saveState();
+      render();
+      setCloudStatus("已连接", "这笔记录已同步到 Supabase。", true);
+    }
+  } catch {
+    setCloudStatus("同步失败", "这笔先保存在本机；Supabase 准备好后可按立即同步。");
+  }
 });
 
-document.querySelector(".transaction-list")?.addEventListener("click", (event) => {
+document.querySelector(".transaction-list")?.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete]");
   if (!button) return;
 
-  const id = Number(button.dataset.delete);
-  state.transactions = state.transactions.filter((item) => item.id !== id);
+  const id = button.dataset.delete;
+  state.transactions = state.transactions.filter((item) => String(item.id) !== id);
   setText(".form-note", "已删除一笔记录。");
   saveState();
   render();
+
+  if (cloudClient && cloudUser && isCloudId(id)) {
+    const { error } = await cloudClient.from("transactions").delete().eq("id", id).eq("user_id", cloudUser.id);
+    if (error) setCloudStatus("云端删除失败", "本机已删除，云端稍后可按立即同步再整理。");
+  }
 });
 
 document.querySelector(".reset-button")?.addEventListener("click", () => {
@@ -597,11 +840,16 @@ document.querySelector(".reset-button")?.addEventListener("click", () => {
   render();
 });
 
-document.querySelector(".clear-button")?.addEventListener("click", () => {
+document.querySelector(".clear-button")?.addEventListener("click", async () => {
   state.transactions = [];
   saveState();
   setText(".form-note", "已清空全部记录。");
   render();
+
+  if (cloudClient && cloudUser) {
+    const { error } = await cloudClient.from("transactions").delete().eq("user_id", cloudUser.id);
+    if (error) setCloudStatus("云端清空失败", "本机已清空，云端稍后再同步整理。");
+  }
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
@@ -628,3 +876,4 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
 });
 
 render();
+initCloud();

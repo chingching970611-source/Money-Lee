@@ -1,10 +1,11 @@
-const CACHE_NAME = "xiaoqianben-app-v12";
+const CACHE_NAME = "xiaoqianben-app-v13";
 const APP_FILES = [
   "./",
   "./index.html",
   "./styles.css",
   "./script.js",
   "./manifest.webmanifest",
+  "./vendor/supabase/supabase.js",
   "./icons/icon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

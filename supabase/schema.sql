@@ -24,6 +24,16 @@ create table if not exists public.monthly_settings (
 alter table public.transactions enable row level security;
 alter table public.monthly_settings enable row level security;
 
+drop policy if exists "Users can read own transactions" on public.transactions;
+drop policy if exists "Users can add own transactions" on public.transactions;
+drop policy if exists "Users can update own transactions" on public.transactions;
+drop policy if exists "Users can delete own transactions" on public.transactions;
+
+drop policy if exists "Users can read own monthly settings" on public.monthly_settings;
+drop policy if exists "Users can add own monthly settings" on public.monthly_settings;
+drop policy if exists "Users can update own monthly settings" on public.monthly_settings;
+drop policy if exists "Users can delete own monthly settings" on public.monthly_settings;
+
 create policy "Users can read own transactions"
 on public.transactions
 for select

@@ -16,6 +16,7 @@
     "@capacitor/ios": "^8.3.4"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
     "tesseract.js": "^7.0.0"
   }
 }
