@@ -85,6 +85,30 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 
 const money = (value) => `RM ${currency.format(Number(value) || 0)}`;
 
+const parseMoneyInput = (value) => {
+  const raw = String(value ?? "")
+    .replace(/rm|myr/gi, "")
+    .replace(/[^\d.,]/g, "")
+    .trim();
+  if (!raw) return 0;
+
+  const lastDot = raw.lastIndexOf(".");
+  const lastComma = raw.lastIndexOf(",");
+  let normalized = raw;
+
+  if (lastDot >= 0 && lastComma >= 0) {
+    normalized =
+      lastComma > lastDot
+        ? raw.replace(/\./g, "").replace(",", ".")
+        : raw.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = /\d+,\d{1,2}$/.test(raw) ? raw.replace(",", ".") : raw.replace(/,/g, "");
+  }
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0;
+};
+
 const cleanText = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1717,7 +1741,7 @@ function clearExpenseForm() {
 }
 
 function fillExpenseForm(item) {
-  document.querySelector(".entry-amount").value = item.amount || "";
+  document.querySelector(".entry-amount").value = item.amount ? currency.format(item.amount) : "";
   const merchantInput = document.querySelector(".entry-merchant");
   const remarkInput = document.querySelector(".entry-remark");
   const dateInput = document.querySelector(".entry-date");
@@ -1764,10 +1788,14 @@ function saveExpenseFromForm(options = {}) {
   const merchantInput = document.querySelector(".entry-merchant");
   const remarkInput = document.querySelector(".entry-remark");
   const dateField = document.querySelector(".entry-date");
-  const amount = Number(amountInput.value);
+  const amount = parseMoneyInput(amountInput.value);
   const date = dateField.value || monthStart();
 
-  if (!amount) return false;
+  if (!amount) {
+    setText(".form-note", "价格可以自己改，例如 12.90、12,90 或 RM12.90。");
+    amountInput.focus();
+    return false;
+  }
 
   const parts = getDateParts(date);
   state.selectedYear = parts.year;
