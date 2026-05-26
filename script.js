@@ -522,6 +522,31 @@ const getSourceTotals = (items = selectedSpendingItems()) =>
     return totals;
   }, {});
 
+const getNeedTotals = (items = selectedSpendingItems()) =>
+  items.reduce(
+    (totals, item) => {
+      const key = normalizeNeedType(item.needType);
+      totals[key] += item.amount;
+      return totals;
+    },
+    { 必须: 0, 想要: 0 },
+  );
+
+const chartGradient = (entries) => {
+  const totalAmount = entries.reduce((sum, [, amount]) => sum + amount, 0);
+  if (!totalAmount) return "#f0e1cd 0 100%";
+
+  let cursor = 0;
+  return entries
+    .map(([category, amount]) => {
+      const start = cursor;
+      const end = cursor + (amount / totalAmount) * 100;
+      cursor = end;
+      return `${categoryColors[category] || categoryColors.其他} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+    })
+    .join(", ");
+};
+
 const updateSelectedButtons = () => {
   document.querySelectorAll(".category-choice").forEach((button) => {
     button.classList.toggle("active", button.dataset.category === state.selectedCategory);
@@ -831,39 +856,78 @@ const renderReport = () => {
   const items = selectedSpendingItems();
   const totals = getCategoryTotals(items);
   const sourceTotals = getSourceTotals(items);
+  const needTotals = getNeedTotals(items);
+  const spent = total(items);
+  const receiptCount = items.filter((item) => item.receiptImage).length;
+  const categoryEntries = expenseCategories
+    .map((category) => [category, totals[category] || 0])
+    .filter(([, amount]) => amount > 0)
+    .sort((a, b) => b[1] - a[1]);
   const biggest = Math.max(...Object.values(totals), 1);
+  const chart = document.querySelector(".category-chart");
+  const legend = document.querySelector(".chart-legend");
 
-  report.innerHTML = expenseCategories
-    .map((category) => {
-      const amount = totals[category] || 0;
+  if (chart) chart.style.setProperty("--chart", chartGradient(categoryEntries));
+  setText(".chart-total", money(spent));
+  setText(".receipt-count", `${receiptCount} 张`);
+  setText(".must-total", money(needTotals.必须));
+  setText(".want-total", money(needTotals.想要));
+  setText(".must-percent", spent ? `${Math.round((needTotals.必须 / spent) * 100)}%` : "0%");
+  setText(".want-percent", spent ? `${Math.round((needTotals.想要 / spent) * 100)}%` : "0%");
+
+  if (legend) {
+    legend.innerHTML = categoryEntries.length
+      ? categoryEntries
+          .slice(0, 4)
+          .map(
+            ([category, amount]) => `
+              <span>
+                <i style="--dot: ${categoryColors[category] || categoryColors.其他}"></i>
+                ${cleanText(category)} ${Math.round((amount / spent) * 100)}%
+              </span>
+            `,
+          )
+          .join("")
+      : "<span>还没有支出分类</span>";
+  }
+
+  if (!categoryEntries.length) {
+    report.innerHTML = '<div class="empty-state">这个月还没有支出图表。新增消费后，这里会自动整理。</div>';
+  } else {
+    report.innerHTML = categoryEntries
+      .map(([category, amount]) => {
       const width = amount ? Math.max((amount / biggest) * 100, 7) : 0;
       return `
         <article class="report-row">
           <div class="report-meta">
-            <span class="category-dot" style="--dot: ${categoryColors[category]}"></span>
+            <span class="category-icon-dot" style="--dot: ${categoryColors[category] || categoryColors.其他}">
+              ${iconMarkup(controlIconMap[category] || "tag")}
+            </span>
             <div class="report-info">
               <div class="report-label">
-                <strong>${category}</strong>
+                <strong>${cleanText(category)}</strong>
                 <span>${money(amount)}</span>
               </div>
               <div class="report-track">
-                <span class="report-fill" style="--bar-width: ${width}%; --dot: ${categoryColors[category]}"></span>
+                <span class="report-fill" style="--bar-width: ${width}%; --dot: ${categoryColors[category] || categoryColors.其他}"></span>
               </div>
             </div>
           </div>
+          <strong class="report-percent">${Math.round((amount / spent) * 100)}%</strong>
         </article>
       `;
-    })
-    .join("");
+      })
+      .join("");
+  }
 
   const top = Object.entries(totals).sort((a, b) => b[1] - a[1])[0];
   const topSource = Object.entries(sourceTotals).sort((a, b) => b[1] - a[1])[0];
-  const topCategory = top ? top[0] : "餐饮";
+  const topCategory = top && top[1] > 0 ? top[0] : "还没有";
   setText(".top-category", `最大支出：${topCategory}`);
   setText(
     ".saving-tip",
-    top
-      ? `${topCategory} 最高，主要从 ${topSource?.[0] || "常用来源"} 支出。`
+    top && top[1] > 0
+      ? `${topCategory} 最高，主要从 ${topSource?.[0] || "常用来源"} 支出；本月有 ${receiptCount} 张收据留底。`
       : "先记录一个月，就会看出自己的消费习惯。",
   );
 };
