@@ -10,11 +10,12 @@ const categoryColors = {
   学习: "#4d8f73",
   娱乐: "#8f74d9",
   生活: "#a86f45",
+  家用: "#e5a33a",
   健康: "#e36f88",
   住宿: "#6876d8",
 };
 
-const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "健康", "住宿"];
+const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "健康", "住宿"];
 const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Atome", "Shopee", "Cash", "其他"];
 const defaultMoneySource = "Debit Card";
 const sourceAliases = {
@@ -35,7 +36,7 @@ const sourceAliases = {
 };
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
-const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "其他"];
+const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "家用", "其他"];
 const viewNames = ["dashboard", "add", "records", "reports", "couple"];
 const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
 const now = new Date();
