@@ -64,7 +64,7 @@
 
         <section class="overview-grid" aria-label="月度总览" data-view-panel="dashboard">
           <article class="metric-card highlight">
-            <span>本月储蓄</span>
+            <span>累计储蓄</span>
             <strong class="saving-amount">RM 0.00</strong>
           </article>
           <article class="metric-card">
@@ -122,6 +122,12 @@
                   <button class="saving-choice exclude" type="button" data-affects-saving="false">不扣储蓄</button>
                 </div>
               </div>
+
+              <label class="expense-bank-field">
+                从哪个账户扣
+                <select class="expense-bank-select"></select>
+                <span class="expense-bank-balance">这个账户累计余额：RM 0.00</span>
+              </label>
 
               <label>
                 Remark（可选，可之后补）
@@ -234,6 +240,10 @@
                   <option value="其他">其他</option>
                 </select>
               </label>
+              <label>
+                薪水进哪个账户
+                <select class="income-bank-select"></select>
+              </label>
               <label class="budget-control">
                 每月消费预算
                 <input class="budget-input" type="number" min="0" step="50" placeholder="可不填" />
@@ -260,6 +270,10 @@
                     <option value="生意">生意</option>
                     <option value="其他">其他</option>
                   </select>
+                </label>
+                <label>
+                  进哪个账户
+                  <select class="extra-income-bank"></select>
                 </label>
               </div>
               <label>
@@ -311,6 +325,10 @@
                   </select>
                 </label>
                 <label>
+                  扣储蓄账户
+                  <select class="fixed-expense-bank-select"></select>
+                </label>
+                <label>
                   分类
                   <select class="fixed-expense-category">
                     <option value="生活">生活</option>
@@ -343,6 +361,29 @@
                 <p class="plan-note">这个收入设定会自动用在所选年份的每个月。</p>
               </div>
             </div>
+          </section>
+
+          <section class="bank-panel" aria-labelledby="bank-title" data-view-panel="dashboard">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">银行账户</p>
+                <h2 id="bank-title">累计余额</h2>
+              </div>
+              <strong class="bank-total">RM 0.00</strong>
+            </div>
+            <div class="bank-list"></div>
+            <form class="bank-form">
+              <label>
+                新增银行 / 钱包
+                <input class="bank-name-input" type="text" placeholder="例如 Maybank、Public Bank、TNG、Cash" />
+              </label>
+              <label>
+                目前已有多少钱
+                <input class="bank-opening-input" type="text" inputmode="decimal" placeholder="例如 1200.00，可不填" />
+              </label>
+              <button class="bank-add-button" type="submit">加入账户</button>
+            </form>
+            <p class="bank-note">薪水和额外收入会进所选账户；只有选择「扣我的储蓄」的消费，才会从账户余额扣除。</p>
           </section>
         </section>
 

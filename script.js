@@ -42,7 +42,9 @@ const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"
 const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "家用", "其他"];
 const needTypes = ["必须", "想要"];
 const viewNames = ["dashboard", "add", "records", "reports", "couple"];
-const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
+const defaultBankId = "main-bank";
+const defaultBankAccount = { id: defaultBankId, name: "主要银行", openingBalance: 0 };
+const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", incomeBankId: defaultBankId, budget: 0 };
 const now = new Date();
 const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const currentYear = now.getFullYear();
@@ -66,7 +68,9 @@ const defaultState = {
   selectedSource: defaultMoneySource,
   selectedNeed: "必须",
   selectedAffectsSaving: true,
+  selectedExpenseBankId: defaultBankId,
   customSource: "",
+  bankAccounts: [{ ...defaultBankAccount }],
   yearPlans: {
     [currentYear]: { ...defaultPlan },
   },
@@ -254,6 +258,69 @@ const normalizeAffectsSaving = (value, fallback = true) => {
   return fallback;
 };
 
+const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeBankId = (value) => String(value || defaultBankId).trim() || defaultBankId;
+
+const normalizeBankAccount = (item = {}, index = 0) => {
+  const name = String(item.name || item.bankName || item.bank_name || item.title || "").trim();
+  const openingBalance = Number(item.openingBalance ?? item.opening_balance ?? item.balance ?? 0);
+  const id = normalizeBankId(item.id || item.bankId || item.bank_id || (index === 0 ? defaultBankId : makeId("bank")));
+
+  return {
+    id,
+    name: name || (id === defaultBankId ? defaultBankAccount.name : "银行账户"),
+    openingBalance: Number.isFinite(openingBalance) ? openingBalance : 0,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+  };
+};
+
+const bankAccountsFor = (target = state) => {
+  const accounts = Array.isArray(target.bankAccounts) ? target.bankAccounts : [];
+  return accounts.length ? accounts : [{ ...defaultBankAccount }];
+};
+
+const getPrimaryBankIdFor = (target = state) => bankAccountsFor(target)[0]?.id || defaultBankId;
+
+const isKnownBankFor = (target, bankId) => bankAccountsFor(target).some((account) => account.id === bankId);
+
+const ensureBankData = (target) => {
+  const seen = new Set();
+  target.bankAccounts = (Array.isArray(target.bankAccounts) ? target.bankAccounts : [{ ...defaultBankAccount }])
+    .map(normalizeBankAccount)
+    .filter((account) => {
+      if (seen.has(account.id)) return false;
+      seen.add(account.id);
+      return true;
+    });
+
+  if (!target.bankAccounts.length) target.bankAccounts = [{ ...defaultBankAccount }];
+  const fallbackBankId = getPrimaryBankIdFor(target);
+
+  if (!isKnownBankFor(target, target.selectedExpenseBankId)) {
+    target.selectedExpenseBankId = fallbackBankId;
+  }
+
+  Object.values(target.yearPlans || {}).forEach((plan) => {
+    if (!isKnownBankFor(target, plan.incomeBankId)) plan.incomeBankId = fallbackBankId;
+  });
+
+  (target.transactions || []).forEach((item) => {
+    if (item.affectsSaving === false) return;
+    if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
+  });
+
+  (target.incomeEntries || []).forEach((item) => {
+    if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
+  });
+
+  (target.fixedExpenses || []).forEach((item) => {
+    if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
+  });
+
+  return target;
+};
+
 const normalizePlan = (plan = {}) => {
   const incomeAmount = Number(plan.incomeAmount ?? plan.income_amount ?? plan.income ?? defaultPlan.incomeAmount);
   const budget = Number(plan.budget ?? defaultPlan.budget);
@@ -264,6 +331,7 @@ const normalizePlan = (plan = {}) => {
   return {
     incomeAmount: Number.isFinite(incomeAmount) && incomeAmount >= 0 ? incomeAmount : defaultPlan.incomeAmount,
     incomeSource,
+    incomeBankId: normalizeBankId(plan.incomeBankId || plan.income_bank_id || plan.bankId || plan.bank_id),
     budget: Number.isFinite(budget) && budget >= 0 ? budget : defaultPlan.budget,
   };
 };
@@ -320,6 +388,7 @@ const normalizeExpense = (item, index) => {
     ),
     category,
     source,
+    bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
     amount,
     date: item.date || item.transaction_date || today,
     receiptText: item.receiptText || item.receipt_text || "",
@@ -342,6 +411,7 @@ const normalizeIncomeEntry = (item, index) => {
     title: String(item.title || item.name || source).trim() || source,
     source,
     category: source,
+    bankId: normalizeBankId(item.bankId || item.bank_id || item.incomeBankId || item.income_bank_id),
     amount,
     date: item.date || item.transaction_date || today,
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
@@ -363,6 +433,7 @@ const normalizeFixedExpense = (item, index) => {
     title,
     category,
     source,
+    bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
     amount,
     year,
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
@@ -426,6 +497,10 @@ const migrateState = (saved) => {
   const formSource = splitSourceForForm(next.selectedSource);
   next.selectedSource = formSource.selectedSource;
   next.customSource = String(next.customSource || formSource.customSource || "").trim();
+  next.selectedExpenseBankId = normalizeBankId(next.selectedExpenseBankId || next.selected_expense_bank_id);
+  next.bankAccounts = (Array.isArray(saved?.bankAccounts) ? saved.bankAccounts : [{ ...defaultBankAccount }])
+    .map(normalizeBankAccount)
+    .filter(Boolean);
   next.yearPlans = {};
 
   Object.entries(saved?.yearPlans || {}).forEach(([year, plan]) => {
@@ -501,6 +576,7 @@ const migrateState = (saved) => {
   });
 
   ensurePlanFor(next, next.selectedYear);
+  ensureBankData(next);
   return next;
 };
 
@@ -554,8 +630,61 @@ const selectedIncomeTotal = () => getSelectedPlan().incomeAmount + total(selecte
 const selectedSpendingTotal = () => total(selectedSpendingItems());
 const selectedDeductibleSpendingTotal = () => total(deductibleSpendingItems());
 const selectedSavingTotal = () => selectedIncomeTotal() - selectedDeductibleSpendingTotal();
+const bankAccounts = () => bankAccountsFor(state);
+const getPrimaryBankId = () => getPrimaryBankIdFor(state);
+const getBankName = (bankId) => bankAccounts().find((account) => account.id === bankId)?.name || "主要银行";
 const coupleRequests = () => (Array.isArray(state.coupleRequests) ? state.coupleRequests : []);
 const pendingCoupleRequests = () => coupleRequests().filter((item) => item.status === "pending");
+
+const monthCountUntil = (year, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+  const numericYear = Number(year);
+  if (!Number.isFinite(numericYear) || numericYear > targetYear) return 0;
+  if (numericYear < targetYear) return 12;
+  return Math.max(Math.min(Number(targetMonth) || 1, 12), 1);
+};
+
+const addToBalance = (balances, bankId, amount) => {
+  const id = isKnownBankFor(state, bankId) ? bankId : getPrimaryBankId();
+  balances[id] = (balances[id] || 0) + Number(amount || 0);
+};
+
+const getBankBalances = (targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+  ensureBankData(state);
+  const balances = bankAccounts().reduce((result, account) => {
+    result[account.id] = Number(account.openingBalance || 0);
+    return result;
+  }, {});
+  const targetKey = monthKey(targetYear, targetMonth);
+
+  Object.entries(state.yearPlans || {}).forEach(([year, plan]) => {
+    const months = monthCountUntil(year, targetYear, targetMonth);
+    if (months > 0 && Number(plan.incomeAmount) > 0) {
+      addToBalance(balances, plan.incomeBankId, Number(plan.incomeAmount) * months);
+    }
+  });
+
+  incomeEntries().forEach((item) => {
+    if (String(item.date || today).slice(0, 7) <= targetKey) {
+      addToBalance(balances, item.bankId, item.amount);
+    }
+  });
+
+  expenses().forEach((item) => {
+    if (item.affectsSaving !== false && String(item.date || today).slice(0, 7) <= targetKey) {
+      addToBalance(balances, item.bankId, -item.amount);
+    }
+  });
+
+  fixedExpenses().forEach((item) => {
+    const months = monthCountUntil(item.year, targetYear, targetMonth);
+    if (months > 0) addToBalance(balances, item.bankId, -Number(item.amount || 0) * months);
+  });
+
+  return balances;
+};
+
+const totalBankBalance = (balances = getBankBalances()) =>
+  Object.values(balances).reduce((sum, amount) => sum + Number(amount || 0), 0);
 
 const getCategoryTotals = (items = selectedSpendingItems()) =>
   items.reduce((totals, item) => {
@@ -705,6 +834,61 @@ const renderPlanControls = () => {
   setText(".plan-note", `这个设定会自动用在 ${state.selectedYear} 年每个月。`);
 };
 
+const bankOptions = () =>
+  bankAccounts()
+    .map((account) => `<option value="${cleanText(account.id)}">${cleanText(account.name)}</option>`)
+    .join("");
+
+const fillBankSelect = (selector, selectedId) => {
+  const select = document.querySelector(selector);
+  if (!select) return;
+  const options = bankOptions();
+  if (select.innerHTML !== options) select.innerHTML = options;
+  const value = isKnownBankFor(state, selectedId) ? selectedId : getPrimaryBankId();
+  select.value = value;
+};
+
+const renderBankControls = () => {
+  ensureBankData(state);
+  const plan = getSelectedPlan();
+  const balances = getBankBalances();
+  const expenseBankId = isKnownBankFor(state, state.selectedExpenseBankId)
+    ? state.selectedExpenseBankId
+    : getPrimaryBankId();
+  state.selectedExpenseBankId = expenseBankId;
+
+  fillBankSelect(".income-bank-select", plan.incomeBankId);
+  fillBankSelect(".extra-income-bank", plan.incomeBankId);
+  fillBankSelect(".expense-bank-select", expenseBankId);
+  fillBankSelect(".fixed-expense-bank-select", expenseBankId);
+
+  const expenseBankField = document.querySelector(".expense-bank-field");
+  if (expenseBankField) expenseBankField.hidden = !state.selectedAffectsSaving;
+  setText(".expense-bank-balance", `这个账户累计余额：${money(balances[expenseBankId] || 0)}`);
+  setText(".bank-total", money(totalBankBalance(balances)));
+
+  const bankList = document.querySelector(".bank-list");
+  if (!bankList) return;
+
+  bankList.innerHTML = bankAccounts()
+    .map(
+      (account) => `
+        <article class="bank-row">
+          <div class="bank-row-main">
+            <strong>${cleanText(account.name)}</strong>
+            <p>起始余额 ${money(account.openingBalance)} · 累计到 ${state.selectedMonth} 月</p>
+          </div>
+          <strong class="bank-balance">${money(balances[account.id] || 0)}</strong>
+          <label class="bank-opening-field">
+            起始余额
+            <input class="bank-opening-edit" data-bank-opening="${cleanText(account.id)}" type="text" inputmode="decimal" value="${cleanText(currency.format(account.openingBalance))}" />
+          </label>
+        </article>
+      `,
+    )
+    .join("");
+};
+
 const renderCouple = () => {
   const couple = normalizeCouple(state.couple);
   state.couple = couple;
@@ -781,7 +965,7 @@ const renderSummary = () => {
   const spent = total(spendingItems);
   const deductibleSpent = selectedDeductibleSpendingTotal();
   const income = selectedIncomeTotal();
-  const saving = income - deductibleSpent;
+  const saving = totalBankBalance();
   const usedPercent = plan.budget ? Math.min(Math.round((deductibleSpent / plan.budget) * 100), 100) : 0;
   const status = !plan.budget ? "未设定" : usedPercent > 95 ? "超支中" : usedPercent > 75 ? "要留意" : "健康";
 
@@ -828,6 +1012,7 @@ const renderTransactions = () => {
               <p>
                 <span class="need-pill ${item.needType === "想要" ? "want" : "must"}">${cleanText(item.needType || "必须")}</span>
                 ${item.affectsSaving === false ? '<span class="saving-pill">不扣储蓄</span>' : ""}
+                ${item.affectsSaving === false ? "" : `<span class="saving-pill">${cleanText(getBankName(item.bankId))}</span>`}
                 ${item.isFixed ? "每月固定" : cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}
               </p>
               ${item.isFixed ? '<p class="receipt-ref">每个月自动算进支出</p>' : ""}
@@ -869,7 +1054,7 @@ const renderIncomeEntries = () => {
         <article class="income-entry-row">
           <div>
             <strong>${cleanText(item.title || item.source)}</strong>
-            <p>${cleanText(item.date)} · ${cleanText(item.source)}</p>
+            <p>${cleanText(item.date)} · ${cleanText(item.source)} · 进 ${cleanText(getBankName(item.bankId))}</p>
           </div>
           <div class="amount-group">
             <span class="income-entry-amount">+${money(item.amount)}</span>
@@ -899,7 +1084,7 @@ const renderFixedExpenses = () => {
         <article class="fixed-expense-row">
           <div>
             <strong>${cleanText(item.title)}</strong>
-            <p>${cleanText(item.source)} · ${cleanText(item.category)} · ${item.year}年每个月</p>
+            <p>${cleanText(item.source)} · ${cleanText(item.category)} · 扣 ${cleanText(getBankName(item.bankId))} · ${item.year}年每个月</p>
           </div>
           <div class="amount-group">
             <span class="fixed-expense-amount-text">-${money(item.amount)}</span>
@@ -1052,12 +1237,14 @@ const renderAnnualReport = () => {
 
 const render = () => {
   ensurePlanFor(state, state.selectedYear);
+  ensureBankData(state);
   decorateChoiceControls();
   updateSelectedButtons();
   renderView();
   renderFormMode();
   renderMonthControls();
   renderPlanControls();
+  renderBankControls();
   renderFixedExpenseControls();
   renderSummary();
   renderTransactions();
@@ -1583,6 +1770,9 @@ document.addEventListener("click", (event) => {
 
   if (choice.classList.contains("saving-choice")) {
     state.selectedAffectsSaving = normalizeAffectsSaving(choice.dataset.affectsSaving);
+    if (state.selectedAffectsSaving && !isKnownBankFor(state, state.selectedExpenseBankId)) {
+      state.selectedExpenseBankId = getPrimaryBankId();
+    }
   }
 
   saveState();
@@ -1617,6 +1807,9 @@ document.querySelectorAll(".need-choice").forEach((button) => {
 document.querySelectorAll(".saving-choice").forEach((button) => {
   button.addEventListener("click", () => {
     state.selectedAffectsSaving = normalizeAffectsSaving(button.dataset.affectsSaving);
+    if (state.selectedAffectsSaving && !isKnownBankFor(state, state.selectedExpenseBankId)) {
+      state.selectedExpenseBankId = getPrimaryBankId();
+    }
     saveState();
     render();
   });
@@ -1625,6 +1818,13 @@ document.querySelectorAll(".saving-choice").forEach((button) => {
 document.querySelector(".custom-source-input")?.addEventListener("input", (event) => {
   state.customSource = event.target.value;
   saveState();
+});
+
+document.querySelector(".expense-bank-select")?.addEventListener("change", (event) => {
+  state.selectedExpenseBankId = isKnownBankFor(state, event.target.value) ? event.target.value : getPrimaryBankId();
+  saveState();
+  renderBankControls();
+  renderSummary();
 });
 
 document.querySelectorAll(".nav-button").forEach((button) => {
@@ -1641,6 +1841,7 @@ document.querySelector(".monthly-income-input")?.addEventListener("input", (even
   plan.incomeAmount = Number(event.target.value) || 0;
   saveState();
   renderSummary();
+  renderBankControls();
   renderAnnualReport();
   schedulePlanSync();
 });
@@ -1653,13 +1854,63 @@ document.querySelector(".income-source-select")?.addEventListener("change", (eve
   schedulePlanSync();
 });
 
+document.querySelector(".income-bank-select")?.addEventListener("change", (event) => {
+  const plan = getSelectedPlan();
+  plan.incomeBankId = isKnownBankFor(state, event.target.value) ? event.target.value : getPrimaryBankId();
+  saveState();
+  render();
+  schedulePlanSync();
+});
+
 document.querySelector(".budget-input")?.addEventListener("input", (event) => {
   const plan = getSelectedPlan();
   plan.budget = Number(event.target.value) || 0;
   saveState();
   renderPlanControls();
   renderSummary();
+  renderBankControls();
   schedulePlanSync();
+});
+
+document.querySelector(".bank-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const nameInput = document.querySelector(".bank-name-input");
+  const openingInput = document.querySelector(".bank-opening-input");
+  const name = String(nameInput?.value || "").trim();
+  if (!name) {
+    nameInput?.focus();
+    setText(".bank-note", "先写银行名字，例如 Maybank、CIMB、TNG 或 Cash。");
+    return;
+  }
+
+  const account = {
+    id: makeId("bank"),
+    name,
+    openingBalance: parseMoneyInput(openingInput?.value || "0"),
+    createdAt: new Date().toISOString(),
+  };
+
+  state.bankAccounts.push(account);
+  state.selectedExpenseBankId = account.id;
+  if (nameInput) nameInput.value = "";
+  if (openingInput) openingInput.value = "";
+  saveState();
+  render();
+  setText(".bank-note", `已加入账户：${name}。之后收入和扣储蓄都可以选它。`);
+});
+
+document.querySelector(".bank-list")?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-bank-opening]");
+  if (!input) return;
+
+  const account = bankAccounts().find((item) => item.id === input.dataset.bankOpening);
+  if (!account) return;
+
+  account.openingBalance = parseMoneyInput(input.value || "0");
+  saveState();
+  render();
+  setText(".bank-note", `已更新 ${account.name} 的起始余额。`);
 });
 
 document.querySelector(".extra-income-form")?.addEventListener("submit", async (event) => {
@@ -1668,6 +1919,7 @@ document.querySelector(".extra-income-form")?.addEventListener("submit", async (
   const amountInput = document.querySelector(".extra-income-amount");
   const sourceInput = document.querySelector(".extra-income-source");
   const titleInput = document.querySelector(".extra-income-title");
+  const bankInput = document.querySelector(".extra-income-bank");
   const amount = Number(amountInput.value);
   if (!amount) return;
 
@@ -1678,6 +1930,7 @@ document.querySelector(".extra-income-form")?.addEventListener("submit", async (
     title: titleInput.value.trim() || source,
     source,
     category: source,
+    bankId: isKnownBankFor(state, bankInput?.value) ? bankInput.value : getPrimaryBankId(),
     amount,
     date: monthStart(),
     createdAt: new Date().toISOString(),
@@ -1703,6 +1956,7 @@ document.querySelector(".fixed-expense-form")?.addEventListener("submit", (event
   const amountInput = document.querySelector(".fixed-expense-amount");
   const sourceInput = document.querySelector(".fixed-expense-source");
   const categoryInput = document.querySelector(".fixed-expense-category");
+  const bankInput = document.querySelector(".fixed-expense-bank-select");
   const amount = Number(amountInput?.value);
   if (!amount) return;
 
@@ -1719,6 +1973,7 @@ document.querySelector(".fixed-expense-form")?.addEventListener("submit", (event
     title,
     source,
     category,
+    bankId: isKnownBankFor(state, bankInput?.value) ? bankInput.value : getPrimaryBankId(),
     amount,
     year: state.selectedYear,
     createdAt: new Date().toISOString(),
@@ -1817,6 +2072,7 @@ function clearExpenseForm() {
   state.editingExpenseId = null;
   state.selectedNeed = "必须";
   state.selectedAffectsSaving = true;
+  state.selectedExpenseBankId = getSelectedPlan().incomeBankId || getPrimaryBankId();
 }
 
 function fillExpenseForm(item) {
@@ -1830,6 +2086,7 @@ function fillExpenseForm(item) {
   state.selectedCategory = expenseCategories.includes(item.category) ? item.category : "生活";
   state.selectedNeed = normalizeNeedType(item.needType);
   state.selectedAffectsSaving = normalizeAffectsSaving(item.affectsSaving);
+  state.selectedExpenseBankId = isKnownBankFor(state, item.bankId) ? item.bankId : getPrimaryBankId();
   const formSource = splitSourceForForm(item.source);
   state.selectedSource = formSource.selectedSource;
   state.customSource = formSource.customSource;
@@ -1904,6 +2161,11 @@ function saveExpenseFromForm(options = {}) {
     affectsSaving: normalizeAffectsSaving(state.selectedAffectsSaving),
     category: state.selectedCategory,
     source: getExpenseSourceFromForm(),
+    bankId: normalizeAffectsSaving(state.selectedAffectsSaving)
+      ? isKnownBankFor(state, state.selectedExpenseBankId)
+        ? state.selectedExpenseBankId
+        : getPrimaryBankId()
+      : "",
     amount,
     date,
     receiptText: pendingReceipt.text || transaction.receiptText || "",
@@ -2040,6 +2302,8 @@ document.querySelector(".couple-request-list")?.addEventListener("click", (event
       reference: "Couple approval",
       category: request.category,
       source: request.source,
+      bankId: getPrimaryBankId(),
+      needType: "必须",
       amount: request.amount,
       affectsSaving: true,
       date: request.date,
@@ -2080,7 +2344,7 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
-  const header = "日期,类型,来源,分类,必须想要,是否扣储蓄,公司店名,Remark,金额,有收据";
+  const header = "日期,类型,来源,银行账户,分类,必须想要,是否扣储蓄,公司店名,Remark,金额,有收据";
   const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) =>
     monthFixedExpenses(state.selectedYear, index + 1),
   ).flat();
@@ -2089,6 +2353,7 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
       item.date,
       item.type === "income" ? "收入" : item.isFixed ? "固定支出" : "消费",
       item.source,
+      item.type === "income" || item.affectsSaving !== false ? getBankName(item.bankId) : "",
       item.category,
       item.needType || (item.type === "expense" ? "必须" : ""),
       item.type === "income" ? "" : item.affectsSaving === false ? "不扣储蓄" : "扣储蓄",
