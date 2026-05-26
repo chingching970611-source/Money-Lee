@@ -1,4 +1,4 @@
-const CACHE_NAME = "xiaoqianben-app-v27";
+const CACHE_NAME = "xiaoqianben-app-v28";
 const APP_FILES = [
   "./",
   "./index.html",
