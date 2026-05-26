@@ -571,7 +571,7 @@ const updateReceiptProgress = (message) => {
     "recognizing text": `正在读收据 ${percent}%`,
   };
 
-  setReceiptMessage(labels[message.status] || "正在读收据", "拍清楚总金额那一行会更准。");
+  setReceiptMessage(labels[message.status] || "正在读收据", "我会重点找 Grand Total 或 Amount Payable。");
 };
 
 const getReceiptWorker = () => {
@@ -622,25 +622,33 @@ const createReceiptArchiveImage = async (file) => {
   return canvas.toDataURL("image/jpeg", 0.68);
 };
 
-const enhanceReceiptImage = async (file) => {
+const prepareReceiptImage = async (file, options = {}) => {
   const image = await loadReceiptImage(file);
-  const maxSide = 1800;
-  const scale = Math.min(maxSide / Math.max(image.naturalWidth, image.naturalHeight), 1);
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const cropTop = options.cropTop ?? 0;
+  const cropBottom = options.cropBottom ?? 1;
+  const maxWidth = options.maxWidth ?? 1500;
+  const maxHeight = options.maxHeight ?? 3200;
+  const sourceY = Math.round(image.naturalHeight * cropTop);
+  const sourceHeight = Math.max(1, Math.round(image.naturalHeight * (cropBottom - cropTop)));
+  const sourceWidth = image.naturalWidth;
+  const scale = Math.min(Math.max(Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight), 0.35), 2);
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
 
   canvas.width = width;
   canvas.height = height;
-  context.drawImage(image, 0, 0, width, height);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
 
   const pixels = context.getImageData(0, 0, width, height);
   const data = pixels.data;
 
   for (let index = 0; index < data.length; index += 4) {
     const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-    const clearer = gray < 165 ? Math.max(0, gray * 0.72) : Math.min(255, 255 - (255 - gray) * 0.66);
+    const clearer = gray < 178 ? Math.max(0, gray * 0.68) : Math.min(255, 255 - (255 - gray) * 0.52);
     data[index] = clearer;
     data[index + 1] = clearer;
     data[index + 2] = clearer;
@@ -654,24 +662,49 @@ const enhanceReceiptImage = async (file) => {
 };
 
 const getBestReceiptText = async (worker, file) => {
-  const enhancedFile = await enhanceReceiptImage(file).catch(() => file);
-  const first = await worker.recognize(enhancedFile);
-  const firstText = first.data.text || "";
+  const image = await loadReceiptImage(file).catch(() => null);
+  const isLongReceipt = image ? image.naturalHeight / Math.max(image.naturalWidth, 1) > 2.2 : false;
+  const passes = [
+    { label: "整张收据", cropTop: 0, cropBottom: 1, maxWidth: 1500, maxHeight: isLongReceipt ? 3600 : 2600 },
+  ];
 
-  if (findReceiptAmount(getReceiptLines(firstText)) || enhancedFile === file) {
-    return firstText;
+  if (isLongReceipt) {
+    passes.push(
+      { label: "收据下半段", cropTop: 0.35, cropBottom: 1, maxWidth: 1500, maxHeight: 3400 },
+      { label: "收据最底部", cropTop: 0.62, cropBottom: 1, maxWidth: 1600, maxHeight: 3000 },
+    );
   }
 
-  setReceiptMessage("正在再读一次", "第一轮没有找到金额，正在用原图再试。");
-  const second = await worker.recognize(file);
-  const secondText = second.data.text || "";
+  const results = [];
 
-  return secondText.length > firstText.length ? secondText : firstText;
+  for (const pass of passes) {
+    setReceiptMessage(`正在读取${pass.label}`, "会优先找 Grand Total / Amount Payable 那一行。");
+    const prepared = await prepareReceiptImage(file, pass).catch(() => file);
+    const recognized = await worker.recognize(prepared);
+    const text = recognized.data.text || "";
+    const candidate = findReceiptAmountCandidate(getReceiptLines(text));
+    results.push({ text, score: candidate?.score || 0 });
+
+    if (!isLongReceipt && candidate?.score >= 150) break;
+  }
+
+  const best = results.slice().sort((a, b) => b.score - a.score || b.text.length - a.text.length);
+  const combined = [...best, ...results.filter((item) => !best.includes(item))]
+    .map((item) => item.text)
+    .filter(Boolean)
+    .join("\n");
+
+  return combined;
 };
 
 const normalizeReceiptLine = (line) =>
   line
     .replace(/[|_]+/g, " ")
+    .replace(/\bGRANT\s+TOTAL\b/gi, "GRAND TOTAL")
+    .replace(/\bGND\s+TOTAL\b/gi, "GRAND TOTAL")
+    .replace(/\bGR\s+TOTAL\b/gi, "GRAND TOTAL")
+    .replace(/\bT0TAL\b/gi, "TOTAL")
+    .replace(/\bTOTA1\b/gi, "TOTAL")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -695,28 +728,35 @@ const getAmountsFromLine = (line) => {
   return amounts;
 };
 
-const findReceiptAmount = (lines) => {
+const findReceiptAmountCandidate = (lines) => {
   const candidates = [];
-  const strongWords = /(grand\s*total|total\s*due|amount\s*due|amount\s*payable|net\s*total|jumlah\s*besar|jumlah\s*perlu\s*dibayar|总计|總計|合计|合計|实付|實付|应付|應付)/i;
-  const totalWords = /(total|amount|paid|payable|jumlah|bayar)/i;
-  const weakWords = /(subtotal|sub\s*total|tax|sst|change|rounding|balance|cash|tender)/i;
+  const grandWords = /(grand\s*total|grant\s*total|g\.?\s*total|grand\s*ttl)/i;
+  const strongWords = /(grand\s*total|grant\s*total|total\s*(amount|due|payable|sales|incl|include|including)|amount\s*(due|payable)|net\s*total|nett\s*total|balance\s*due|jumlah\s*(besar|perlu|bayar|keseluruhan)|总计|總計|合计|合計|实付|實付|应付|應付)/i;
+  const totalWords = /\b(total|amount|paid|payable|jumlah|bayar|due|nett?)\b/i;
+  const weakWords = /(subtotal|sub\s*total|tax|sst|gst|service\s*charge|change|rounding|voucher|discount|points|member|cash|tender|tendered|payment|paid\s*by|visa|master|card)/i;
 
   lines.forEach((line, index) => {
+    const context = [lines[index - 2], lines[index - 1], line, lines[index + 1]].filter(Boolean).join(" ");
+
     getAmountsFromLine(line).forEach((amount) => {
       let score = amount / 100;
-      if (strongWords.test(line)) score += 100;
-      else if (totalWords.test(line)) score += 55;
-      if (weakWords.test(line)) score -= 35;
+      if (grandWords.test(context)) score += 180;
+      else if (strongWords.test(context)) score += 130;
+      else if (totalWords.test(context)) score += 58;
+      if (weakWords.test(context)) score -= 48;
       if (index < 3) score -= 10;
+      score += (index / Math.max(lines.length - 1, 1)) * 30;
 
-      candidates.push({ amount, score });
+      candidates.push({ amount, score, line, context });
     });
   });
 
   if (!candidates.length) return null;
   candidates.sort((a, b) => b.score - a.score || b.amount - a.amount);
-  return candidates[0].amount;
+  return candidates[0];
 };
+
+const findReceiptAmount = (lines) => findReceiptAmountCandidate(lines)?.amount || null;
 
 const toReceiptDate = (year, month, day) => {
   const fullYear = Number(year) < 100 ? 2000 + Number(year) : Number(year);
@@ -805,7 +845,7 @@ const resetReceiptPreview = () => {
   receiptPreviewUrl = "";
   if (receiptImage) receiptImage.removeAttribute("src");
   if (receiptPreview) receiptPreview.hidden = true;
-  setReceiptMessage("已选择照片", "请确认金额有没有读错，再按新增消费。");
+  setReceiptMessage("已选择照片", "请确认 Grand Total 有没有读对，再按新增消费。");
 };
 
 receiptInput?.addEventListener("change", async (event) => {
@@ -821,8 +861,8 @@ receiptInput?.addEventListener("change", async (event) => {
     receiptImage.src = receiptPreviewUrl;
   }
   if (receiptPreview) receiptPreview.hidden = false;
-  setReceiptMessage("正在整理照片", "会先自动调清楚，再找总金额、店名和日期。");
-  setText(".form-note", "正在帮你整理收据照片，等一下就会自动填进表格。");
+  setReceiptMessage("正在整理照片", "会先看整张，再重点看收据底部的 Grand Total。");
+  setText(".form-note", "正在读取收据，长收据会多读底部一次。");
 
   try {
     pendingReceipt.image = await createReceiptArchiveImage(file).catch(() => "");
@@ -851,15 +891,15 @@ receiptInput?.addEventListener("change", async (event) => {
         result.merchant ? `内容 ${result.merchant}` : "",
       ].filter(Boolean);
 
-      setReceiptMessage("已自动填好", "请看一下有没有读错，确认后按「新增消费」。");
+      setReceiptMessage("已自动填好", "请看一下 Grand Total 有没有读错，确认后按「新增消费」。");
       setText(".form-note", `收据已读取：${details.join("，")}。`);
     } else {
-      setReceiptMessage("照片已保存", "暂时读不到金额，你可以手动填；照片还是会跟着记录保存。");
-      setText(".form-note", "这张收据暂时读不到金额。拍清楚总金额那一行会更准。");
+      setReceiptMessage("照片已保存", "这张没读到 Grand Total，你可以手动填金额。");
+      setText(".form-note", "我没有把握读对总金额，所以先不乱填；照片会跟着记录保存。");
     }
   } catch {
-    setReceiptMessage("照片已保存", "自动读取暂时不能用，你可以先手动填。");
-    setText(".form-note", "收据识别暂时不能用，我会保留手动记录，不影响新增。");
+    setReceiptMessage("照片已保存", "这次没有成功读取金额，你可以先手动填。");
+    setText(".form-note", "这张照片已保存；金额先手动填，不影响新增记录。");
   } finally {
     event.target.value = "";
   }
