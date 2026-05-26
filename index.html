@@ -367,6 +367,116 @@
           </div>
           <div class="annual-bars"></div>
         </section>
+
+        <section class="couple-panel" aria-labelledby="couple-title" data-view-panel="couple">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">夫妻共享</p>
+              <h2 id="couple-title">Couple 账本</h2>
+            </div>
+            <span class="couple-status">未连接</span>
+          </div>
+
+          <div class="couple-grid">
+            <article class="couple-card">
+              <span>我的本月</span>
+              <strong class="couple-my-saving">RM 0.00</strong>
+              <p class="couple-my-summary">收入 RM 0.00 · 支出 RM 0.00</p>
+            </article>
+            <article class="couple-card partner">
+              <span>对方 Dashboard</span>
+              <strong class="couple-partner-name">连接后显示</strong>
+              <p class="couple-partner-summary">连接后可以看对方每月收入、开销、储蓄和记录。</p>
+            </article>
+          </div>
+
+          <div class="couple-link-box">
+            <div>
+              <strong>Linking</strong>
+              <p>先建立连接资料；真正两台手机同步时，会用邀请链接和 approval 保护隐私。</p>
+            </div>
+            <div class="couple-link-fields">
+              <label>
+                我的名字
+                <input class="couple-my-name" type="text" placeholder="例如 Kaby" />
+              </label>
+              <label>
+                对方名字
+                <input class="couple-partner-input" type="text" placeholder="例如 老公 / 老婆" />
+              </label>
+            </div>
+            <div class="couple-code-row">
+              <button class="couple-code-button" type="button">生成我的连接码</button>
+              <code class="couple-code">还未生成</code>
+            </div>
+          </div>
+
+          <form class="couple-request-form">
+            <div class="mini-heading">
+              <strong>帮对方填写记录</strong>
+              <span>需要 approval</span>
+            </div>
+            <div class="couple-request-grid">
+              <label>
+                这笔记录属于谁
+                <select class="couple-request-owner">
+                  <option value="partner">对方的账本，等对方批准</option>
+                  <option value="me">我的账本，等我批准</option>
+                </select>
+              </label>
+              <label>
+                金额
+                <input class="couple-request-amount" type="number" min="0.1" step="0.1" placeholder="例如 38.90" />
+              </label>
+              <label>
+                内容
+                <input class="couple-request-title" type="text" placeholder="例如 晚餐、停车、电话费" />
+              </label>
+              <label>
+                日期
+                <input class="couple-request-date" type="date" />
+              </label>
+              <label>
+                付款方式
+                <select class="couple-request-source">
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="TNG">TNG</option>
+                  <option value="Grab">Grab</option>
+                  <option value="Atome">Atome</option>
+                  <option value="Shopee">Shopee</option>
+                  <option value="Cash">Cash</option>
+                  <option value="其他">其他</option>
+                </select>
+              </label>
+              <label>
+                分类
+                <select class="couple-request-category">
+                  <option value="餐饮">餐饮</option>
+                  <option value="交通">交通</option>
+                  <option value="购物">购物</option>
+                  <option value="学习">学习</option>
+                  <option value="娱乐">娱乐</option>
+                  <option value="生活">生活</option>
+                  <option value="健康">健康</option>
+                  <option value="住宿">住宿</option>
+                </select>
+              </label>
+            </div>
+            <button class="couple-request-button" type="submit">提交待批准</button>
+          </form>
+
+          <div class="couple-approval-box">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">Approval</p>
+                <h2>待批准记录</h2>
+              </div>
+              <span class="couple-pending-count">0 笔</span>
+            </div>
+            <div class="couple-request-list"></div>
+          </div>
+        </section>
       </main>
 
       <nav class="app-nav" aria-label="主要菜单">
@@ -374,6 +484,7 @@
         <button class="nav-button" type="button" data-view="add">新增</button>
         <button class="nav-button" type="button" data-view="records">记录</button>
         <button class="nav-button" type="button" data-view="reports">报表</button>
+        <button class="nav-button" type="button" data-view="couple">Couple</button>
       </nav>
     </div>
 

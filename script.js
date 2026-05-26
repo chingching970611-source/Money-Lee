@@ -36,6 +36,7 @@ const sourceAliases = {
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
 const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "其他"];
+const viewNames = ["dashboard", "add", "records", "reports", "couple"];
 const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
 const now = new Date();
 const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -65,6 +66,13 @@ const defaultState = {
   transactions: [],
   incomeEntries: [],
   fixedExpenses: [],
+  couple: {
+    myName: "",
+    partnerName: "",
+    linkCode: "",
+    connected: false,
+  },
+  coupleRequests: [],
 };
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -206,6 +214,37 @@ const normalizeFixedExpense = (item, index) => {
   };
 };
 
+const normalizeCouple = (couple = {}) => ({
+  myName: String(couple.myName || couple.my_name || "").trim(),
+  partnerName: String(couple.partnerName || couple.partner_name || "").trim(),
+  linkCode: String(couple.linkCode || couple.link_code || "").trim(),
+  connected: Boolean(couple.connected),
+});
+
+const normalizeCoupleRequest = (item, index) => {
+  const amount = Number(item.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const owner = item.owner === "me" ? "me" : "partner";
+  const status = ["pending", "approved", "rejected"].includes(item.status) ? item.status : "pending";
+  const category = expenseCategories.includes(item.category) ? item.category : "生活";
+  const source = normalizeMoneySource(item.source || defaultMoneySource);
+
+  return {
+    id: item.id ?? Date.now() + index,
+    type: "couple-request",
+    owner,
+    status,
+    title: String(item.title || item.name || category).trim() || category,
+    category,
+    source,
+    amount,
+    date: item.date || today,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+    decidedAt: item.decidedAt || item.decided_at || "",
+  };
+};
+
 const isDefaultSampleExpense = (item) => {
   const title = String(item?.title || "");
   const amount = Number(item?.amount);
@@ -224,9 +263,7 @@ const migrateState = (saved) => {
   const next = { ...clone(defaultState), ...(saved || {}) };
   next.selectedYear = Number(next.selectedYear) || currentYear;
   next.selectedMonth = Math.min(Math.max(Number(next.selectedMonth) || currentMonth, 1), 12);
-  next.activeView = ["dashboard", "add", "records", "reports"].includes(next.activeView)
-    ? next.activeView
-    : "dashboard";
+  next.activeView = viewNames.includes(next.activeView) ? next.activeView : "dashboard";
   next.editingExpenseId = null;
   next.selectedCategory = expenseCategories.includes(next.selectedCategory) ? next.selectedCategory : "餐饮";
   const formSource = splitSourceForForm(next.selectedSource);
@@ -297,6 +334,10 @@ const migrateState = (saved) => {
   next.fixedExpenses = (Array.isArray(saved?.fixedExpenses) ? saved.fixedExpenses : [])
     .map(normalizeFixedExpense)
     .filter(Boolean);
+  next.couple = normalizeCouple(saved?.couple || {});
+  next.coupleRequests = (Array.isArray(saved?.coupleRequests) ? saved.coupleRequests : [])
+    .map(normalizeCoupleRequest)
+    .filter(Boolean);
 
   Object.entries(incomeByYear).forEach(([year, amount]) => {
     if (amount > 0 && !next.yearPlans[year]) next.yearPlans[year] = normalizePlan();
@@ -348,6 +389,10 @@ const monthIncomeEntries = (year, month) =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
 const total = (items) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 const selectedIncomeTotal = () => getSelectedPlan().incomeAmount + total(selectedIncomeEntries());
+const selectedSpendingTotal = () => total(selectedSpendingItems());
+const selectedSavingTotal = () => selectedIncomeTotal() - selectedSpendingTotal();
+const coupleRequests = () => (Array.isArray(state.coupleRequests) ? state.coupleRequests : []);
+const pendingCoupleRequests = () => coupleRequests().filter((item) => item.status === "pending");
 
 const getCategoryTotals = (items = selectedSpendingItems()) =>
   items.reduce((totals, item) => {
@@ -453,6 +498,76 @@ const renderPlanControls = () => {
   if (budgetInput && document.activeElement !== budgetInput) budgetInput.value = plan.budget || "";
   setText(".budget-amount", plan.budget ? money(plan.budget) : "未设定");
   setText(".plan-note", `这个设定会自动用在 ${state.selectedYear} 年每个月。`);
+};
+
+const renderCouple = () => {
+  const couple = normalizeCouple(state.couple);
+  state.couple = couple;
+  const myIncome = selectedIncomeTotal();
+  const mySpent = selectedSpendingTotal();
+  const mySaving = selectedSavingTotal();
+  const pending = pendingCoupleRequests();
+  const partnerName = couple.partnerName || "对方";
+
+  setText(".couple-status", couple.connected ? `已准备连接 ${partnerName}` : "未连接");
+  setText(".couple-my-saving", money(mySaving));
+  setText(".couple-my-summary", `收入 ${money(myIncome)} · 支出 ${money(mySpent)} · ${selectedSpendingItems().length} 笔`);
+  setText(".couple-partner-name", couple.connected ? partnerName : "连接后显示");
+  setText(
+    ".couple-partner-summary",
+    couple.connected
+      ? "下一步接上云端后，会显示对方 Dashboard、记录、收入和每月开销。"
+      : "连接后可以看对方每月收入、开销、储蓄和记录。",
+  );
+  setText(".couple-code", couple.linkCode || "还未生成");
+  setText(".couple-pending-count", `${pending.length} 笔`);
+
+  const myNameInput = document.querySelector(".couple-my-name");
+  const partnerInput = document.querySelector(".couple-partner-input");
+  if (myNameInput && document.activeElement !== myNameInput) myNameInput.value = couple.myName || "";
+  if (partnerInput && document.activeElement !== partnerInput) partnerInput.value = couple.partnerName || "";
+
+  const requestDate = document.querySelector(".couple-request-date");
+  if (requestDate && !requestDate.value) requestDate.value = today;
+
+  const list = document.querySelector(".couple-request-list");
+  if (!list) return;
+
+  const items = coupleRequests().slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">还没有待批准记录。帮对方填写后，会先停在这里。</div>';
+    return;
+  }
+
+  list.innerHTML = items
+    .map((item) => {
+      const ownedByMe = item.owner === "me";
+      const statusText = item.status === "approved" ? "已批准" : item.status === "rejected" ? "已拒绝" : "待批准";
+      const ownerText = ownedByMe ? "我的账本" : `${partnerName} 的账本`;
+      return `
+        <article class="couple-request-row ${item.status}">
+          <div>
+            <strong>${cleanText(item.title)}</strong>
+            <p>${cleanText(ownerText)} · ${cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}</p>
+            <span>${statusText}</span>
+          </div>
+          <div class="amount-group">
+            <span class="transaction-amount">-${money(item.amount)}</span>
+            ${
+              item.status === "pending" && ownedByMe
+                ? `
+                  <button class="approve-button" type="button" data-approve-couple="${cleanText(item.id)}">批准</button>
+                  <button class="delete-button" type="button" data-reject-couple="${cleanText(item.id)}">拒绝</button>
+                `
+                : item.status === "pending"
+                  ? '<span class="waiting-pill">等对方批准</span>'
+                  : ""
+            }
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 };
 
 const renderSummary = () => {
@@ -705,6 +820,7 @@ const render = () => {
   renderFixedExpenses();
   renderReport();
   renderAnnualReport();
+  renderCouple();
 };
 
 const schedulePlanSync = () => {};
@@ -1331,6 +1447,69 @@ document.querySelector(".fixed-expense-form")?.addEventListener("submit", (event
   setText(".form-note", `已加入固定支出：${title} ${money(amount)}，${state.selectedYear} 年每个月都会自动计算。`);
 });
 
+document.querySelector(".couple-my-name")?.addEventListener("input", (event) => {
+  state.couple.myName = event.target.value.trim();
+  saveState();
+  renderCouple();
+});
+
+document.querySelector(".couple-partner-input")?.addEventListener("input", (event) => {
+  state.couple.partnerName = event.target.value.trim();
+  state.couple.connected = Boolean(state.couple.partnerName || state.couple.linkCode);
+  saveState();
+  renderCouple();
+});
+
+document.querySelector(".couple-code-button")?.addEventListener("click", () => {
+  const code = Math.random().toString(36).slice(2, 6).toUpperCase();
+  state.couple.linkCode = `XB-${state.selectedYear}-${code}`;
+  state.couple.connected = Boolean(state.couple.partnerName || state.couple.linkCode);
+  saveState();
+  renderCouple();
+  setText(".form-note", "已生成连接码。下一步接云端后，这个位置会变成真正邀请链接。");
+});
+
+document.querySelector(".couple-request-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const ownerInput = document.querySelector(".couple-request-owner");
+  const amountInput = document.querySelector(".couple-request-amount");
+  const titleInput = document.querySelector(".couple-request-title");
+  const dateInput = document.querySelector(".couple-request-date");
+  const sourceInput = document.querySelector(".couple-request-source");
+  const categoryInput = document.querySelector(".couple-request-category");
+  const amount = Number(amountInput?.value);
+  if (!amount) return;
+
+  const category = expenseCategories.includes(categoryInput?.value) ? categoryInput.value : "生活";
+  const title = titleInput?.value.trim() || category;
+  const owner = ownerInput?.value === "me" ? "me" : "partner";
+  state.coupleRequests.push({
+    id: Date.now(),
+    type: "couple-request",
+    owner,
+    status: "pending",
+    title,
+    category,
+    source: normalizeMoneySource(sourceInput?.value || defaultMoneySource),
+    amount,
+    date: dateInput?.value || today,
+    createdAt: new Date().toISOString(),
+    decidedAt: "",
+  });
+
+  amountInput.value = "";
+  if (titleInput) titleInput.value = "";
+  saveState();
+  render();
+  setText(
+    ".form-note",
+    owner === "me"
+      ? `已放进待批准：${title} ${money(amount)}。批准后才会进入你的账本。`
+      : `已提交给对方批准：${title} ${money(amount)}。对方批准前不会进入账本。`,
+  );
+});
+
 function getExpenseSourceFromForm() {
   if (state.selectedSource !== "其他") {
     state.customSource = "";
@@ -1542,6 +1721,43 @@ document.querySelector(".fixed-expense-list")?.addEventListener("click", (event)
   saveState();
   render();
   setText(".form-note", "已删除固定支出。");
+});
+
+document.querySelector(".couple-request-list")?.addEventListener("click", (event) => {
+  const approveButton = event.target.closest("[data-approve-couple]");
+  const rejectButton = event.target.closest("[data-reject-couple]");
+  const id = approveButton?.dataset.approveCouple || rejectButton?.dataset.rejectCouple;
+  if (!id) return;
+
+  const request = coupleRequests().find((item) => String(item.id) === String(id));
+  if (!request || request.status !== "pending") return;
+
+  if (approveButton) {
+    request.status = "approved";
+    request.decidedAt = new Date().toISOString();
+    state.transactions.push({
+      id: Date.now(),
+      type: "expense",
+      title: request.title,
+      merchant: "",
+      reference: "Couple approval",
+      category: request.category,
+      source: request.source,
+      amount: request.amount,
+      date: request.date,
+      receiptText: "",
+      receiptImage: "",
+      createdAt: new Date().toISOString(),
+    });
+    setText(".form-note", `已批准并加入你的账本：${request.title} ${money(request.amount)}`);
+  } else {
+    request.status = "rejected";
+    request.decidedAt = new Date().toISOString();
+    setText(".form-note", `已拒绝这笔记录：${request.title}`);
+  }
+
+  saveState();
+  render();
 });
 
 document.querySelector(".reset-button")?.addEventListener("click", () => {

@@ -86,6 +86,7 @@ a {
 .form-actions,
 .month-control,
 .transaction-row,
+.couple-request-row,
 .report-row,
 .budget-status-box,
 .annual-row {
@@ -267,7 +268,8 @@ button:focus-visible {
 .income-panel,
 .ledger-panel,
 .report-panel,
-.annual-panel {
+.annual-panel,
+.couple-panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -321,7 +323,8 @@ button:focus-visible {
 .income-panel,
 .ledger-panel,
 .report-panel,
-.annual-panel {
+.annual-panel,
+.couple-panel {
   padding: 22px;
 }
 
@@ -342,7 +345,9 @@ button:focus-visible {
 .plan-year-label,
 .budget-status,
 .annual-period-label,
-.selected-period-label {
+.selected-period-label,
+.couple-status,
+.waiting-pill {
   padding: 8px 10px;
   color: var(--muted);
   background: var(--soft);
@@ -637,6 +642,118 @@ button:focus-visible {
   margin-top: 14px;
 }
 
+.couple-panel {
+  margin-top: 14px;
+}
+
+.couple-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.couple-card,
+.couple-link-box,
+.couple-request-form,
+.couple-approval-box {
+  padding: 16px;
+  background: #fff8ec;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.couple-card {
+  display: grid;
+  gap: 8px;
+}
+
+.couple-card.partner {
+  background: #f5f7e8;
+}
+
+.couple-card span,
+.couple-link-box p,
+.couple-card p,
+.couple-request-row p {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.couple-card strong {
+  font-size: 1.45rem;
+}
+
+.couple-link-box,
+.couple-request-form,
+.couple-approval-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.couple-link-fields,
+.couple-request-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.couple-link-fields label,
+.couple-request-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.couple-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.couple-code {
+  min-height: 42px;
+  padding: 11px 13px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.couple-code-button,
+.couple-request-button,
+.approve-button {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--green), #55b47d);
+  border: 0;
+}
+
+.couple-request-list {
+  display: grid;
+  gap: 10px;
+}
+
+.couple-request-row {
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.couple-request-row.approved {
+  background: #f1fbef;
+}
+
+.couple-request-row.rejected {
+  opacity: 0.72;
+}
+
 .transaction-list,
 .category-report,
 .annual-bars {
@@ -873,7 +990,7 @@ button:focus-visible {
   z-index: 20;
   display: grid;
   width: min(520px, calc(100% - 28px));
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 8px;
   background: rgba(255, 253, 249, 0.94);
@@ -1058,7 +1175,8 @@ button:focus-visible {
   .income-panel,
   .ledger-panel,
   .report-panel,
-  .annual-panel {
+  .annual-panel,
+  .couple-panel {
     padding: 16px;
   }
 
@@ -1067,6 +1185,7 @@ button:focus-visible {
   .receipt-top,
   .receipt-preview,
   .transaction-row,
+  .couple-request-row,
   .budget-status-box,
   .amount-group {
     align-items: stretch;
@@ -1076,6 +1195,9 @@ button:focus-visible {
   .period-fields,
   .extra-income-grid,
   .fixed-expense-grid,
+  .couple-grid,
+  .couple-link-fields,
+  .couple-request-grid,
   .annual-summary {
     grid-template-columns: 1fr;
   }
@@ -1099,7 +1221,8 @@ button:focus-visible {
   .income-panel,
   .ledger-panel,
   .report-panel,
-  .annual-panel {
+  .annual-panel,
+  .couple-panel {
     border-color: rgba(137, 91, 28, 0.18);
   }
 
@@ -1125,7 +1248,8 @@ button:focus-visible {
   }
 
   .edit-button,
-  .delete-button {
+  .delete-button,
+  .approve-button {
     width: 100%;
   }
 
