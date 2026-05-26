@@ -35,6 +35,7 @@ const nextMonthStart = (year = state.selectedYear, month = state.selectedMonth) 
 
 const defaultState = {
   activeView: "dashboard",
+  editingExpenseId: null,
   selectedYear: currentYear,
   selectedMonth: currentMonth,
   selectedCategory: "餐饮",
@@ -174,6 +175,7 @@ const migrateState = (saved) => {
   next.activeView = ["dashboard", "add", "records", "reports"].includes(next.activeView)
     ? next.activeView
     : "dashboard";
+  next.editingExpenseId = null;
   next.selectedCategory = expenseCategories.includes(next.selectedCategory) ? next.selectedCategory : "餐饮";
   next.selectedSource = moneySources.includes(next.selectedSource) ? next.selectedSource : "电子钱包";
   next.yearPlans = {};
@@ -312,6 +314,14 @@ const renderView = () => {
   });
 };
 
+const renderFormMode = () => {
+  const isEditing = Boolean(state.editingExpenseId);
+  setText(".submit-button", isEditing ? "保存修改" : "新增消费");
+  setText(".form-note", isEditing ? "正在修改这笔消费，确认后按「保存修改」。" : document.querySelector(".form-note")?.textContent || "");
+  const cancelButton = document.querySelector(".cancel-edit-button");
+  if (cancelButton) cancelButton.hidden = !isEditing;
+};
+
 const updateEntryDateForSelectedMonth = () => {
   const dateInput = document.querySelector(".entry-date");
   if (!dateInput) return;
@@ -420,6 +430,7 @@ const renderTransactions = () => {
           </div>
           <div class="amount-group">
             <span class="transaction-amount">-${money(item.amount)}</span>
+            <button class="edit-button" type="button" data-edit="${cleanText(item.id)}" aria-label="修改 ${cleanText(item.title)}">改</button>
             <button class="delete-button" type="button" data-delete="${cleanText(item.id)}" aria-label="删除 ${cleanText(item.title)}">删</button>
           </div>
         </article>
@@ -558,6 +569,7 @@ const render = () => {
   ensurePlanFor(state, state.selectedYear);
   updateSelectedButtons();
   renderView();
+  renderFormMode();
   renderMonthControls();
   renderPlanControls();
   renderSummary();
@@ -1145,6 +1157,54 @@ document.querySelector(".extra-income-form")?.addEventListener("submit", async (
   setText(".form-note", `已加入本月额外收入：${money(amount)}`);
 });
 
+function clearExpenseForm() {
+  document.querySelector(".entry-amount").value = "";
+  document.querySelector(".entry-title").value = "";
+  document.querySelector(".entry-merchant").value = "";
+  document.querySelector(".entry-reference").value = "";
+  updateEntryDateForSelectedMonth();
+  resetReceiptPreview();
+  state.editingExpenseId = null;
+}
+
+function fillExpenseForm(item) {
+  document.querySelector(".entry-amount").value = item.amount || "";
+  document.querySelector(".entry-title").value = item.title || "";
+  document.querySelector(".entry-merchant").value = item.merchant || "";
+  document.querySelector(".entry-reference").value = item.reference || "";
+  document.querySelector(".entry-date").value = item.date || monthStart();
+  state.selectedCategory = expenseCategories.includes(item.category) ? item.category : "生活";
+  state.selectedSource = moneySources.includes(item.source) ? item.source : "电子钱包";
+  pendingReceipt = {
+    image: item.receiptImage || "",
+    text: item.receiptText || "",
+    autoSaved: false,
+  };
+
+  if (item.receiptImage) {
+    if (receiptImage) receiptImage.src = item.receiptImage;
+    if (receiptPreview) receiptPreview.hidden = false;
+    setReceiptMessage("已载入原本收据", "可以修改金额、分类、公司名或号码。");
+  } else {
+    if (receiptPreview) receiptPreview.hidden = true;
+  }
+}
+
+function startExpenseEdit(id) {
+  const item = state.transactions.find((transaction) => String(transaction.id) === String(id));
+  if (!item) return;
+  state.editingExpenseId = item.id;
+  state.activeView = "add";
+  const parts = getDateParts(item.date);
+  state.selectedYear = parts.year;
+  state.selectedMonth = parts.month;
+  saveState();
+  render();
+  fillExpenseForm(item);
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function saveExpenseFromForm(options = {}) {
   const amountInput = document.querySelector(".entry-amount");
   const titleInput = document.querySelector(".entry-title");
@@ -1164,9 +1224,16 @@ function saveExpenseFromForm(options = {}) {
   const merchant = merchantInput.value.trim();
   const reference = referenceInput.value.trim();
   const title = titleInput.value.trim() || merchant || state.selectedCategory;
-  const transaction = {
+  const existing = state.editingExpenseId
+    ? state.transactions.find((item) => String(item.id) === String(state.editingExpenseId))
+    : null;
+  const transaction = existing || {
     id: Date.now(),
     type: "expense",
+    createdAt: new Date().toISOString(),
+  };
+
+  Object.assign(transaction, {
     title,
     merchant,
     reference,
@@ -1174,24 +1241,26 @@ function saveExpenseFromForm(options = {}) {
     source: state.selectedSource,
     amount,
     date,
-    receiptText: pendingReceipt.text,
-    receiptImage: pendingReceipt.image,
-    createdAt: new Date().toISOString(),
-  };
+    receiptText: pendingReceipt.text || transaction.receiptText || "",
+    receiptImage: pendingReceipt.image || transaction.receiptImage || "",
+  });
 
-  state.transactions.push(transaction);
+  if (!existing) state.transactions.push(transaction);
 
-  amountInput.value = "";
-  titleInput.value = "";
-  merchantInput.value = "";
-  referenceInput.value = "";
-  updateEntryDateForSelectedMonth();
-  resetReceiptPreview();
+  const wasEditing = Boolean(state.editingExpenseId);
+  clearExpenseForm();
   state.activeView = "records";
   saveState();
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
-  setText(".form-note", options.auto ? `已自动新增：${title} ${money(amount)}` : `已新增：${title} ${money(amount)}`);
+  setText(
+    ".form-note",
+    wasEditing
+      ? `已保存修改：${title} ${money(amount)}`
+      : options.auto
+        ? `已自动新增：${title} ${money(amount)}`
+        : `已新增：${title} ${money(amount)}`,
+  );
   return true;
 }
 
@@ -1221,6 +1290,12 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
     return;
   }
 
+  const editButton = event.target.closest("[data-edit]");
+  if (editButton) {
+    startExpenseEdit(editButton.dataset.edit);
+    return;
+  }
+
   const button = event.target.closest("[data-delete]");
   if (!button) return;
 
@@ -1229,6 +1304,13 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
   setText(".form-note", "已删除一笔消费记录。");
   saveState();
   render();
+});
+
+document.querySelector(".cancel-edit-button")?.addEventListener("click", () => {
+  clearExpenseForm();
+  saveState();
+  render();
+  setText(".form-note", "已取消修改。");
 });
 
 document.querySelector(".receipt-modal-close")?.addEventListener("click", () => {

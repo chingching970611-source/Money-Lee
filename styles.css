@@ -133,6 +133,7 @@ button,
 .reset-button,
 .clear-button,
 .month-arrow,
+.edit-button,
 .delete-button {
   padding: 0 14px;
   color: var(--ink);
@@ -705,6 +706,22 @@ button:focus-visible {
   color: var(--muted);
 }
 
+.edit-button {
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--soft);
+}
+
+.cancel-edit-button {
+  min-height: 50px;
+  padding: 0 18px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
 .report-row {
   align-items: stretch;
 }
@@ -1077,6 +1094,7 @@ button:focus-visible {
     align-self: flex-end;
   }
 
+  .edit-button,
   .delete-button {
     width: 100%;
   }
