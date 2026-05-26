@@ -105,6 +105,19 @@
               <input class="entry-date" type="hidden" />
 
               <div class="choice-block">
+                <span>这笔是</span>
+                <div class="need-picker" role="radiogroup" aria-label="选择必须或想要">
+                  <button class="need-choice must active" type="button" data-need="必须">必须</button>
+                  <button class="need-choice want" type="button" data-need="想要">想要</button>
+                </div>
+              </div>
+
+              <label>
+                Remark（可选）
+                <input class="entry-remark" type="text" placeholder="例如 跟朋友吃饭、买给家里、可以下次少买" />
+              </label>
+
+              <div class="choice-block">
                 <span>付款方式 / 扣哪里</span>
                 <div class="source-picker" role="radiogroup" aria-label="选择付款方式">
                   <button class="source-choice active" type="button" data-source="Debit Card">Debit Card</button>

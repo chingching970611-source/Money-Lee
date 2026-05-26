@@ -381,14 +381,16 @@ button:focus-visible {
 }
 
 .source-picker,
-.category-picker {
+.category-picker,
+.need-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .source-choice,
-.category-choice {
+.category-choice,
+.need-choice {
   min-height: 50px;
   padding: 0 10px;
   color: var(--ink);
@@ -401,6 +403,22 @@ button:focus-visible {
   color: var(--ink);
   background: var(--amber);
   border-color: #efb943;
+}
+
+.need-picker {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.need-choice.must.active {
+  color: #163f2c;
+  background: #cdeed5;
+  border-color: #9bd5ad;
+}
+
+.need-choice.want.active {
+  color: #773247;
+  background: #ffd3de;
+  border-color: #f19ab1;
 }
 
 .custom-source-field {
@@ -818,6 +836,32 @@ button:focus-visible {
   color: #8a6a38;
 }
 
+.remark-text {
+  color: #765b35;
+  font-weight: 800;
+}
+
+.need-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.need-pill.must {
+  color: #1f5a3d;
+  background: #dff4df;
+}
+
+.need-pill.want {
+  color: #8d3650;
+  background: #ffe1ea;
+}
+
 .auto-save-toggle {
   display: flex;
   align-items: center;
@@ -1207,12 +1251,14 @@ button:focus-visible {
   }
 
   .source-picker,
-  .category-picker {
+  .category-picker,
+  .need-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .source-choice,
-  .category-choice {
+  .category-choice,
+  .need-choice {
     min-height: 48px;
     background: #fffaf2;
   }

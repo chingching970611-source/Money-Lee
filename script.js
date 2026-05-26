@@ -39,6 +39,7 @@ const sourceAliases = {
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
 const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "家用", "其他"];
+const needTypes = ["必须", "想要"];
 const viewNames = ["dashboard", "add", "records", "reports", "couple"];
 const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
 const now = new Date();
@@ -62,6 +63,7 @@ const defaultState = {
   selectedMonth: currentMonth,
   selectedCategory: "餐饮",
   selectedSource: defaultMoneySource,
+  selectedNeed: "必须",
   customSource: "",
   yearPlans: {
     [currentYear]: { ...defaultPlan },
@@ -107,6 +109,8 @@ const splitSourceForForm = (value) => {
     ? { selectedSource: source, customSource: "" }
     : { selectedSource: "其他", customSource: source };
 };
+
+const normalizeNeedType = (value) => (needTypes.includes(value) ? value : "必须");
 
 const normalizePlan = (plan = {}) => {
   const incomeAmount = Number(plan.incomeAmount ?? plan.income_amount ?? plan.income ?? defaultPlan.incomeAmount);
@@ -166,6 +170,8 @@ const normalizeExpense = (item, index) => {
     title: String(item.title || item.name || category).trim() || category,
     merchant: String(item.merchant || item.company || item.store || "").trim(),
     reference: String(item.reference || item.receiptNo || item.receipt_no || item.paymentNo || item.payment_no || "").trim(),
+    remark: String(item.remark || item.note || item.notes || "").trim(),
+    needType: normalizeNeedType(item.needType || item.need_type || item.need || item.priority),
     category,
     source,
     amount,
@@ -269,6 +275,7 @@ const migrateState = (saved) => {
   next.activeView = viewNames.includes(next.activeView) ? next.activeView : "dashboard";
   next.editingExpenseId = null;
   next.selectedCategory = expenseCategories.includes(next.selectedCategory) ? next.selectedCategory : "餐饮";
+  next.selectedNeed = normalizeNeedType(next.selectedNeed);
   const formSource = splitSourceForForm(next.selectedSource);
   next.selectedSource = formSource.selectedSource;
   next.customSource = String(next.customSource || formSource.customSource || "").trim();
@@ -378,6 +385,8 @@ const monthFixedExpenses = (year, month) =>
     originalId: item.id,
     type: "fixed-expense",
     isFixed: true,
+    needType: "必须",
+    remark: "",
     date: `${monthKey(year, month)}-01`,
   }));
 const selectedExpenses = () => expenses().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
@@ -416,6 +425,10 @@ const updateSelectedButtons = () => {
 
   document.querySelectorAll(".source-choice").forEach((button) => {
     button.classList.toggle("active", button.dataset.source === state.selectedSource);
+  });
+
+  document.querySelectorAll(".need-choice").forEach((button) => {
+    button.classList.toggle("active", button.dataset.need === state.selectedNeed);
   });
 
   const customSourceField = document.querySelector(".custom-source-field");
@@ -622,8 +635,12 @@ const renderTransactions = () => {
             }
             <div class="transaction-meta">
               <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
-              <p>${item.isFixed ? "每月固定" : cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}</p>
+              <p>
+                <span class="need-pill ${item.needType === "想要" ? "want" : "must"}">${cleanText(item.needType || "必须")}</span>
+                ${item.isFixed ? "每月固定" : cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}
+              </p>
               ${item.isFixed ? '<p class="receipt-ref">每个月自动算进支出</p>' : ""}
+              ${!item.isFixed && item.remark ? `<p class="remark-text">Remark：${cleanText(item.remark)}</p>` : ""}
             </div>
           </div>
           <div class="amount-group">
@@ -1326,6 +1343,14 @@ document.querySelectorAll(".source-choice").forEach((button) => {
   });
 });
 
+document.querySelectorAll(".need-choice").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.selectedNeed = normalizeNeedType(button.dataset.need);
+    saveState();
+    render();
+  });
+});
+
 document.querySelector(".custom-source-input")?.addEventListener("input", (event) => {
   state.customSource = event.target.value;
   saveState();
@@ -1513,19 +1538,25 @@ function getExpenseSourceFromForm() {
 function clearExpenseForm() {
   document.querySelector(".entry-amount").value = "";
   const merchantInput = document.querySelector(".entry-merchant");
+  const remarkInput = document.querySelector(".entry-remark");
   if (merchantInput) merchantInput.value = "";
+  if (remarkInput) remarkInput.value = "";
   updateEntryDateForSelectedMonth();
   resetReceiptPreview();
   state.editingExpenseId = null;
+  state.selectedNeed = "必须";
 }
 
 function fillExpenseForm(item) {
   document.querySelector(".entry-amount").value = item.amount || "";
   const merchantInput = document.querySelector(".entry-merchant");
+  const remarkInput = document.querySelector(".entry-remark");
   const dateInput = document.querySelector(".entry-date");
   if (merchantInput) merchantInput.value = item.merchant || item.title || "";
+  if (remarkInput) remarkInput.value = item.remark || "";
   if (dateInput) dateInput.value = item.date || monthStart();
   state.selectedCategory = expenseCategories.includes(item.category) ? item.category : "生活";
+  state.selectedNeed = normalizeNeedType(item.needType);
   const formSource = splitSourceForForm(item.source);
   state.selectedSource = formSource.selectedSource;
   state.customSource = formSource.customSource;
@@ -1562,6 +1593,7 @@ function startExpenseEdit(id) {
 function saveExpenseFromForm(options = {}) {
   const amountInput = document.querySelector(".entry-amount");
   const merchantInput = document.querySelector(".entry-merchant");
+  const remarkInput = document.querySelector(".entry-remark");
   const dateField = document.querySelector(".entry-date");
   const amount = Number(amountInput.value);
   const date = dateField.value || monthStart();
@@ -1574,6 +1606,7 @@ function saveExpenseFromForm(options = {}) {
   ensurePlanFor(state, state.selectedYear);
 
   const merchant = merchantInput.value.trim();
+  const remark = String(remarkInput?.value || "").trim();
   const reference = "";
   const title = merchant || state.selectedCategory;
   const existing = state.editingExpenseId
@@ -1589,6 +1622,8 @@ function saveExpenseFromForm(options = {}) {
     title,
     merchant,
     reference,
+    remark,
+    needType: normalizeNeedType(state.selectedNeed),
     category: state.selectedCategory,
     source: getExpenseSourceFromForm(),
     amount,
@@ -1766,7 +1801,7 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
-  const header = "日期,类型,来源,分类,公司店名,金额,有收据";
+  const header = "日期,类型,来源,分类,必须想要,公司店名,Remark,金额,有收据";
   const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) =>
     monthFixedExpenses(state.selectedYear, index + 1),
   ).flat();
@@ -1776,7 +1811,9 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
       item.type === "income" ? "收入" : item.isFixed ? "固定支出" : "消费",
       item.source,
       item.category,
+      item.needType || (item.type === "expense" ? "必须" : ""),
       item.merchant || "",
+      item.remark || "",
       item.amount,
       item.type === "expense" && item.receiptImage ? "有" : "无",
     ]
