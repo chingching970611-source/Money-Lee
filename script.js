@@ -15,19 +15,27 @@ const categoryColors = {
 };
 
 const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "健康", "住宿"];
-const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Cash", "其他"];
+const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Atome", "Shopee", "Cash", "其他"];
 const defaultMoneySource = "Debit Card";
 const sourceAliases = {
   电子钱包: "TNG",
   银行户口: "Debit Card",
   银行扣账: "Debit Card",
   现金: "Cash",
+  ShopeePay: "Shopee",
+  "Shopee Pay": "Shopee",
+  "Shopee PayLater": "Shopee",
+  "Shopee Payback Later": "Shopee",
+  "GrabPay": "Grab",
+  "Grab Pay": "Grab",
+  "Grab PayLater": "Grab",
   "Touch n Go": "TNG",
   "Touch 'n Go": "TNG",
   "Touch & Go": "TNG",
 };
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
+const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "其他"];
 const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
 const now = new Date();
 const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -56,6 +64,7 @@ const defaultState = {
   },
   transactions: [],
   incomeEntries: [],
+  fixedExpenses: [],
 };
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -176,6 +185,27 @@ const normalizeIncomeEntry = (item, index) => {
   };
 };
 
+const normalizeFixedExpense = (item, index) => {
+  const amount = Number(item.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const title = String(item.title || item.name || item.label || "固定支出").trim() || "固定支出";
+  const category = expenseCategories.includes(item.category) ? item.category : "生活";
+  const source = normalizeMoneySource(item.source || item.moneySource || item.money_source || "Credit Card");
+  const year = Number(item.year || item.selectedYear || item.selected_year || currentYear) || currentYear;
+
+  return {
+    id: item.id ?? Date.now() + index,
+    type: "fixed-expense",
+    title,
+    category,
+    source,
+    amount,
+    year,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+  };
+};
+
 const isDefaultSampleExpense = (item) => {
   const title = String(item?.title || "");
   const amount = Number(item?.amount);
@@ -264,6 +294,10 @@ const migrateState = (saved) => {
     .map(normalizeIncomeEntry)
     .filter(Boolean);
 
+  next.fixedExpenses = (Array.isArray(saved?.fixedExpenses) ? saved.fixedExpenses : [])
+    .map(normalizeFixedExpense)
+    .filter(Boolean);
+
   Object.entries(incomeByYear).forEach(([year, amount]) => {
     if (amount > 0 && !next.yearPlans[year]) next.yearPlans[year] = normalizePlan();
   });
@@ -290,23 +324,38 @@ const saveState = () => {
 const getSelectedPlan = () => ensurePlanFor(state, state.selectedYear);
 const expenses = () => state.transactions.filter((item) => item.type === "expense");
 const incomeEntries = () => (Array.isArray(state.incomeEntries) ? state.incomeEntries : []);
+const fixedExpenses = () => (Array.isArray(state.fixedExpenses) ? state.fixedExpenses : []);
+const fixedExpensesForYear = (year = state.selectedYear) =>
+  fixedExpenses().filter((item) => Number(item.year) === Number(year));
+const monthFixedExpenses = (year, month) =>
+  fixedExpensesForYear(year).map((item) => ({
+    ...item,
+    id: `fixed-${item.id}-${monthKey(year, month)}`,
+    originalId: item.id,
+    type: "fixed-expense",
+    isFixed: true,
+    date: `${monthKey(year, month)}-01`,
+  }));
 const selectedExpenses = () => expenses().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
+const selectedFixedExpenses = () => monthFixedExpenses(state.selectedYear, state.selectedMonth);
+const selectedSpendingItems = () => [...selectedExpenses(), ...selectedFixedExpenses()];
 const selectedIncomeEntries = () =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
 const monthExpenses = (year, month) =>
   expenses().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
+const monthSpendingItems = (year, month) => [...monthExpenses(year, month), ...monthFixedExpenses(year, month)];
 const monthIncomeEntries = (year, month) =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
 const total = (items) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 const selectedIncomeTotal = () => getSelectedPlan().incomeAmount + total(selectedIncomeEntries());
 
-const getCategoryTotals = (items = selectedExpenses()) =>
+const getCategoryTotals = (items = selectedSpendingItems()) =>
   items.reduce((totals, item) => {
     totals[item.category] = (totals[item.category] || 0) + item.amount;
     return totals;
   }, {});
 
-const getSourceTotals = (items = selectedExpenses()) =>
+const getSourceTotals = (items = selectedSpendingItems()) =>
   items.reduce((totals, item) => {
     totals[item.source] = (totals[item.source] || 0) + item.amount;
     return totals;
@@ -328,6 +377,12 @@ const updateSelectedButtons = () => {
   if (customSourceInput && document.activeElement !== customSourceInput) {
     customSourceInput.value = needsCustomSource ? state.customSource || "" : "";
   }
+};
+
+const renderFixedExpenseControls = () => {
+  const titleSelect = document.querySelector(".fixed-expense-title");
+  const customField = document.querySelector(".fixed-expense-custom-title-field");
+  if (customField) customField.hidden = titleSelect?.value !== "其他";
 };
 
 const renderView = () => {
@@ -402,7 +457,8 @@ const renderPlanControls = () => {
 
 const renderSummary = () => {
   const plan = getSelectedPlan();
-  const spent = total(selectedExpenses());
+  const spendingItems = selectedSpendingItems();
+  const spent = total(spendingItems);
   const income = selectedIncomeTotal();
   const saving = income - spent;
   const usedPercent = plan.budget ? Math.min(Math.round((spent / plan.budget) * 100), 100) : 0;
@@ -411,8 +467,9 @@ const renderSummary = () => {
   setText(".saving-amount", money(saving));
   setText(".spent-amount", money(spent));
   setText(".income-amount", money(income));
-  setText(".entry-count", `${selectedExpenses().length} 笔`);
+  setText(".entry-count", `${spendingItems.length} 笔`);
   setText(".extra-income-total", money(total(selectedIncomeEntries())));
+  setText(".fixed-expense-total", money(total(selectedFixedExpenses())));
   setText(".used-percent", `${usedPercent}%`);
   setText(".budget-status", status);
 
@@ -424,9 +481,9 @@ const renderTransactions = () => {
   const list = document.querySelector(".transaction-list");
   if (!list) return;
 
-  const items = selectedExpenses();
+  const items = selectedSpendingItems();
   if (!items.length) {
-    list.innerHTML = '<div class="empty-state">这个月还没有消费记录。新增一笔后，这里会自动整理。</div>';
+    list.innerHTML = '<div class="empty-state">这个月还没有消费记录。新增一笔或固定支出后，这里会自动整理。</div>';
     return;
   }
 
@@ -438,23 +495,24 @@ const renderTransactions = () => {
     .sort((a, b) => sortValue(b) - sortValue(a))
     .map(
       (item) => `
-        <article class="transaction-row">
+        <article class="transaction-row ${item.isFixed ? "fixed-row" : ""}">
           <div class="transaction-main">
             ${
-              item.receiptImage
+              !item.isFixed && item.receiptImage
                 ? `<button class="receipt-thumb-button" type="button" data-view-receipt="${cleanText(item.id)}" aria-label="查看 ${cleanText(item.title)} 的收据"><img class="receipt-thumb" src="${item.receiptImage}" alt="${cleanText(item.title)} 的收据" /></button>`
                 : `<span class="category-dot" style="--dot: ${categoryColors[item.category] || categoryColors.生活}"></span>`
             }
             <div class="transaction-meta">
               <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
-              <p>${cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}</p>
+              <p>${item.isFixed ? "每月固定" : cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}</p>
+              ${item.isFixed ? '<p class="receipt-ref">每个月自动算进支出</p>' : ""}
               ${
-                item.reference
+                !item.isFixed && item.reference
                   ? `<p class="receipt-ref">付款/收据号：${cleanText(item.reference)}</p>`
                   : ""
               }
               ${
-                item.merchant && item.title && item.title !== item.merchant
+                !item.isFixed && item.merchant && item.title && item.title !== item.merchant
                   ? `<p class="receipt-ref">内容：${cleanText(item.title)}</p>`
                   : ""
               }
@@ -462,8 +520,14 @@ const renderTransactions = () => {
           </div>
           <div class="amount-group">
             <span class="transaction-amount">-${money(item.amount)}</span>
-            <button class="edit-button" type="button" data-edit="${cleanText(item.id)}" aria-label="修改 ${cleanText(item.title)}">改</button>
-            <button class="delete-button" type="button" data-delete="${cleanText(item.id)}" aria-label="删除 ${cleanText(item.title)}">删</button>
+            ${
+              item.isFixed
+                ? `<button class="delete-button" type="button" data-delete-fixed="${cleanText(item.originalId)}" aria-label="删除固定支出 ${cleanText(item.title)}">删</button>`
+                : `
+                  <button class="edit-button" type="button" data-edit="${cleanText(item.id)}" aria-label="修改 ${cleanText(item.title)}">改</button>
+                  <button class="delete-button" type="button" data-delete="${cleanText(item.id)}" aria-label="删除 ${cleanText(item.title)}">删</button>
+                `
+            }
           </div>
         </article>
       `,
@@ -501,11 +565,41 @@ const renderIncomeEntries = () => {
     .join("");
 };
 
+const renderFixedExpenses = () => {
+  const list = document.querySelector(".fixed-expense-list");
+  if (!list) return;
+
+  const items = fixedExpensesForYear(state.selectedYear);
+  if (!items.length) {
+    list.innerHTML = '<div class="mini-empty">还没有固定支出。加入后，每个月会自动算进去。</div>';
+    return;
+  }
+
+  list.innerHTML = items
+    .slice()
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+    .map(
+      (item) => `
+        <article class="fixed-expense-row">
+          <div>
+            <strong>${cleanText(item.title)}</strong>
+            <p>${cleanText(item.source)} · ${cleanText(item.category)} · ${item.year}年每个月</p>
+          </div>
+          <div class="amount-group">
+            <span class="fixed-expense-amount-text">-${money(item.amount)}</span>
+            <button class="delete-button" type="button" data-delete-fixed="${cleanText(item.id)}" aria-label="删除固定支出 ${cleanText(item.title)}">删</button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+};
+
 const renderReport = () => {
   const report = document.querySelector(".category-report");
   if (!report) return;
 
-  const items = selectedExpenses();
+  const items = selectedSpendingItems();
   const totals = getCategoryTotals(items);
   const sourceTotals = getSourceTotals(items);
   const biggest = Math.max(...Object.values(totals), 1);
@@ -551,7 +645,7 @@ const renderAnnualReport = () => {
   const months = Array.from({ length: 12 }, (_, index) => index + 1);
   const annualExpense = months
     .filter((month) => month <= monthLimit)
-    .reduce((sum, month) => sum + total(monthExpenses(state.selectedYear, month)), 0);
+    .reduce((sum, month) => sum + total(monthSpendingItems(state.selectedYear, month)), 0);
   const monthlyIncome = (month) => plan.incomeAmount + total(monthIncomeEntries(state.selectedYear, month));
   const annualIncome = months
     .filter((month) => month <= monthLimit)
@@ -559,7 +653,7 @@ const renderAnnualReport = () => {
   const annualSaving = annualIncome - annualExpense;
   const biggest = Math.max(
     ...months.map((month) => monthlyIncome(month)),
-    ...months.map((month) => total(monthExpenses(state.selectedYear, month))),
+    ...months.map((month) => total(monthSpendingItems(state.selectedYear, month))),
     1,
   );
 
@@ -573,11 +667,11 @@ const renderAnnualReport = () => {
 
   annualBars.innerHTML = months
     .map((month) => {
-      const expense = total(monthExpenses(state.selectedYear, month));
+      const spending = total(monthSpendingItems(state.selectedYear, month));
       const income = monthlyIncome(month);
       const muted = month > monthLimit;
       const incomeWidth = Math.max((income / biggest) * 100, income ? 4 : 0);
-      const expenseWidth = Math.max((expense / biggest) * 100, expense ? 4 : 0);
+      const expenseWidth = Math.max((spending / biggest) * 100, spending ? 4 : 0);
 
       return `
         <article class="annual-row ${muted ? "muted" : ""}">
@@ -590,7 +684,7 @@ const renderAnnualReport = () => {
               <span style="--bar-width: ${expenseWidth}%"></span>
             </div>
           </div>
-          <strong>${muted ? "未到" : money(income - expense)}</strong>
+          <strong>${muted ? "未到" : money(income - spending)}</strong>
         </article>
       `;
     })
@@ -604,9 +698,11 @@ const render = () => {
   renderFormMode();
   renderMonthControls();
   renderPlanControls();
+  renderFixedExpenseControls();
   renderSummary();
   renderTransactions();
   renderIncomeEntries();
+  renderFixedExpenses();
   renderReport();
   renderAnnualReport();
 };
@@ -1195,6 +1291,46 @@ document.querySelector(".extra-income-form")?.addEventListener("submit", async (
   setText(".form-note", `已加入本月额外收入：${money(amount)}`);
 });
 
+document.querySelector(".fixed-expense-title")?.addEventListener("change", () => {
+  renderFixedExpenseControls();
+});
+
+document.querySelector(".fixed-expense-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const titleSelect = document.querySelector(".fixed-expense-title");
+  const customTitleInput = document.querySelector(".fixed-expense-custom-title");
+  const amountInput = document.querySelector(".fixed-expense-amount");
+  const sourceInput = document.querySelector(".fixed-expense-source");
+  const categoryInput = document.querySelector(".fixed-expense-category");
+  const amount = Number(amountInput?.value);
+  if (!amount) return;
+
+  const presetTitle = fixedExpensePresets.includes(titleSelect?.value) ? titleSelect.value : "其他";
+  const title = presetTitle === "其他"
+    ? customTitleInput?.value.trim() || "固定支出"
+    : presetTitle;
+  const source = normalizeMoneySource(sourceInput?.value || "Credit Card");
+  const category = expenseCategories.includes(categoryInput?.value) ? categoryInput.value : "生活";
+
+  state.fixedExpenses.push({
+    id: Date.now(),
+    type: "fixed-expense",
+    title,
+    source,
+    category,
+    amount,
+    year: state.selectedYear,
+    createdAt: new Date().toISOString(),
+  });
+
+  amountInput.value = "";
+  if (customTitleInput) customTitleInput.value = "";
+  saveState();
+  render();
+  setText(".form-note", `已加入固定支出：${title} ${money(amount)}，${state.selectedYear} 年每个月都会自动计算。`);
+});
+
 function getExpenseSourceFromForm() {
   if (state.selectedSource !== "其他") {
     state.customSource = "";
@@ -1342,6 +1478,16 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
     return;
   }
 
+  const fixedDeleteButton = event.target.closest("[data-delete-fixed]");
+  if (fixedDeleteButton) {
+    const id = fixedDeleteButton.dataset.deleteFixed;
+    state.fixedExpenses = fixedExpenses().filter((item) => String(item.id) !== String(id));
+    setText(".form-note", "已删除固定支出。");
+    saveState();
+    render();
+    return;
+  }
+
   const editButton = event.target.closest("[data-edit]");
   if (editButton) {
     startExpenseEdit(editButton.dataset.edit);
@@ -1387,6 +1533,17 @@ document.querySelector(".extra-income-list")?.addEventListener("click", async (e
   setText(".form-note", "已删除一笔额外收入。");
 });
 
+document.querySelector(".fixed-expense-list")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-fixed]");
+  if (!button) return;
+
+  const id = button.dataset.deleteFixed;
+  state.fixedExpenses = fixedExpenses().filter((item) => String(item.id) !== String(id));
+  saveState();
+  render();
+  setText(".form-note", "已删除固定支出。");
+});
+
 document.querySelector(".reset-button")?.addEventListener("click", () => {
   state = clone(defaultState);
   saveState();
@@ -1404,16 +1561,19 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
     return date < start || date >= end;
   });
   saveState();
-  setText(".form-note", "已清空这个月的消费记录。");
+  setText(".form-note", "已清空这个月的手动消费记录，固定支出会保留。");
   render();
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
   const header = "日期,类型,来源,分类,公司店名,付款收据号码,内容,金额,有收据";
-  const rows = [...expenses(), ...incomeEntries()].map((item) =>
+  const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) =>
+    monthFixedExpenses(state.selectedYear, index + 1),
+  ).flat();
+  const rows = [...expenses(), ...fixedRows, ...incomeEntries()].map((item) =>
     [
       item.date,
-      item.type === "income" ? "收入" : "消费",
+      item.type === "income" ? "收入" : item.isFixed ? "固定支出" : "消费",
       item.source,
       item.category,
       item.merchant || "",

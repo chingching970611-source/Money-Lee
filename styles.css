@@ -229,7 +229,8 @@ h2 {
 .period-fields label,
 .entry-form label,
 .income-form label,
-.extra-income-form label {
+.extra-income-form label,
+.fixed-expense-form label {
   display: grid;
   gap: 8px;
   color: var(--ink);
@@ -504,7 +505,8 @@ button:focus-visible {
   color: var(--ink);
 }
 
-.extra-income-form {
+.extra-income-form,
+.fixed-expense-form {
   display: grid;
   gap: 12px;
   margin-top: 18px;
@@ -515,7 +517,8 @@ button:focus-visible {
 }
 
 .mini-heading,
-.income-entry-row {
+.income-entry-row,
+.fixed-expense-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -532,25 +535,39 @@ button:focus-visible {
   font-weight: 900;
 }
 
-.extra-income-grid {
+.fixed-expense-total,
+.fixed-expense-amount-text {
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.extra-income-grid,
+.fixed-expense-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
-.extra-income-button {
+.extra-income-button,
+.fixed-expense-button {
   min-height: 44px;
   color: #fff;
   background: linear-gradient(135deg, var(--green), #55b47d);
   border: 0;
 }
 
-.extra-income-list {
+.fixed-expense-button {
+  background: linear-gradient(135deg, var(--coral), #f0a84f);
+}
+
+.extra-income-list,
+.fixed-expense-list {
   display: grid;
   gap: 8px;
 }
 
-.income-entry-row {
+.income-entry-row,
+.fixed-expense-row {
   padding: 10px;
   background: #fff;
   border: 1px solid var(--line);
@@ -558,6 +575,7 @@ button:focus-visible {
 }
 
 .income-entry-row p,
+.fixed-expense-row p,
 .mini-empty {
   margin: 4px 0 0;
   color: var(--muted);
@@ -635,6 +653,10 @@ button:focus-visible {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.transaction-row.fixed-row {
+  background: #fff7e4;
 }
 
 .transaction-main,
@@ -1053,6 +1075,7 @@ button:focus-visible {
 
   .period-fields,
   .extra-income-grid,
+  .fixed-expense-grid,
   .annual-summary {
     grid-template-columns: 1fr;
   }

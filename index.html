@@ -124,6 +124,8 @@
                   <button class="source-choice" type="button" data-source="Credit Card">Credit Card</button>
                   <button class="source-choice" type="button" data-source="TNG">TNG</button>
                   <button class="source-choice" type="button" data-source="Grab">Grab</button>
+                  <button class="source-choice" type="button" data-source="Atome">Atome</button>
+                  <button class="source-choice" type="button" data-source="Shopee">Shopee</button>
                   <button class="source-choice" type="button" data-source="Cash">Cash</button>
                   <button class="source-choice" type="button" data-source="其他">其他</button>
                 </div>
@@ -239,6 +241,63 @@
               </label>
               <button class="extra-income-button" type="submit">加入本月收入</button>
               <div class="extra-income-list"></div>
+            </form>
+
+            <form class="fixed-expense-form">
+              <div class="mini-heading">
+                <strong>每月固定支出</strong>
+                <span class="fixed-expense-total">RM 0.00</span>
+              </div>
+              <div class="fixed-expense-grid">
+                <label>
+                  固定支出
+                  <select class="fixed-expense-title">
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Shopee PayLater">Shopee PayLater</option>
+                    <option value="Grab PayLater">Grab PayLater</option>
+                    <option value="Insurance">Insurance</option>
+                    <option value="Telecom">Telecom</option>
+                    <option value="Atome">Atome</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </label>
+                <label>
+                  每月金额
+                  <input class="fixed-expense-amount" type="number" min="0.1" step="0.1" placeholder="例如 188" />
+                </label>
+                <label class="fixed-expense-custom-title-field" hidden>
+                  自己写名称
+                  <input class="fixed-expense-custom-title" type="text" placeholder="例如 Gym、Parking、Netflix" />
+                </label>
+                <label>
+                  扣哪里
+                  <select class="fixed-expense-source">
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Shopee">Shopee</option>
+                    <option value="Grab">Grab</option>
+                    <option value="Atome">Atome</option>
+                    <option value="TNG">TNG</option>
+                    <option value="Debit Card">Debit Card</option>
+                    <option value="Cash">Cash</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </label>
+                <label>
+                  分类
+                  <select class="fixed-expense-category">
+                    <option value="生活">生活</option>
+                    <option value="购物">购物</option>
+                    <option value="交通">交通</option>
+                    <option value="健康">健康</option>
+                    <option value="住宿">住宿</option>
+                    <option value="学习">学习</option>
+                    <option value="娱乐">娱乐</option>
+                    <option value="餐饮">餐饮</option>
+                  </select>
+                </label>
+              </div>
+              <button class="fixed-expense-button" type="submit">加入固定支出</button>
+              <div class="fixed-expense-list"></div>
             </form>
 
             <div class="budget-status-box">
