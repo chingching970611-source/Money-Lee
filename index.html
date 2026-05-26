@@ -6,7 +6,7 @@
     <title>小钱本 - 自用记账应用</title>
     <meta
       name="description"
-      content="小钱本是一个先给自己使用的简单记账应用，帮你快速记录收入、支出、预算和分类。"
+      content="小钱本是一个简单清楚的自用记账应用，帮你记录每月收入、消费、收据照片和年度报表。"
     />
     <meta name="theme-color" content="#17211d" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -42,23 +42,53 @@
       <main id="top">
         <section class="app-titlebar">
           <div>
-            <p class="eyebrow">小钱本</p>
-            <h1>记账</h1>
+            <p class="eyebrow">自用账本</p>
+            <h1 class="current-month-title">本月账本</h1>
+            <p class="title-note">每个月重新开始记录，收入自动加入，消费才需要拍收据和分类。</p>
           </div>
-          <span class="saved-label">本机保存</span>
+          <div class="month-control" aria-label="切换月份">
+            <button class="month-arrow month-prev" type="button" aria-label="上个月">‹</button>
+            <div class="period-fields">
+              <label>
+                年份
+                <select class="year-select"></select>
+              </label>
+              <label>
+                月份
+                <select class="month-select"></select>
+              </label>
+            </div>
+            <button class="month-arrow month-next" type="button" aria-label="下个月">›</button>
+          </div>
+        </section>
+
+        <section class="overview-grid" aria-label="月度总览">
+          <article class="metric-card highlight">
+            <span>本月储蓄</span>
+            <strong class="saving-amount">RM 0.00</strong>
+          </article>
+          <article class="metric-card">
+            <span>每月收入</span>
+            <strong class="income-amount">RM 0.00</strong>
+          </article>
+          <article class="metric-card">
+            <span>本月消费</span>
+            <strong class="spent-amount">RM 0.00</strong>
+          </article>
+          <article class="metric-card">
+            <span>消费记录</span>
+            <strong class="entry-count">0 笔</strong>
+          </article>
         </section>
 
         <section class="app-grid">
           <section class="record-panel" aria-labelledby="record-title">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">快速新增</p>
-                <h2 id="record-title">记一笔</h2>
+                <p class="eyebrow">消费记录</p>
+                <h2 id="record-title">新增一笔消费</h2>
               </div>
-              <div class="type-switch" aria-label="收入或支出">
-                <button class="type-button active" type="button" data-type="expense">支出</button>
-                <button class="type-button" type="button" data-type="income">收入</button>
-              </div>
+              <span class="saved-label selected-period-label">本月</span>
             </div>
 
             <form class="entry-form">
@@ -73,15 +103,40 @@
                 </label>
               </div>
               <label>
-                内容
-                <input class="entry-title" type="text" placeholder="例如 午餐、打车、薪水" required />
+                内容（可选）
+                <input class="entry-title" type="text" placeholder="例如 午餐、买菜、停车" />
               </label>
+
+              <div class="choice-block">
+                <span>钱从哪里来</span>
+                <div class="source-picker" role="radiogroup" aria-label="选择消费来源">
+                  <button class="source-choice active" type="button" data-source="电子钱包">电子钱包</button>
+                  <button class="source-choice" type="button" data-source="银行户口">银行户口</button>
+                  <button class="source-choice" type="button" data-source="银行扣账">银行扣账</button>
+                  <button class="source-choice" type="button" data-source="现金">现金</button>
+                  <button class="source-choice" type="button" data-source="其他">其他</button>
+                </div>
+              </div>
+
+              <div class="choice-block">
+                <span>花在哪里</span>
+                <div class="category-picker" role="radiogroup" aria-label="选择分类">
+                  <button class="category-choice active" type="button" data-category="餐饮">餐饮</button>
+                  <button class="category-choice" type="button" data-category="交通">交通</button>
+                  <button class="category-choice" type="button" data-category="购物">购物</button>
+                  <button class="category-choice" type="button" data-category="学习">学习</button>
+                  <button class="category-choice" type="button" data-category="娱乐">娱乐</button>
+                  <button class="category-choice" type="button" data-category="生活">生活</button>
+                  <button class="category-choice" type="button" data-category="健康">健康</button>
+                  <button class="category-choice" type="button" data-category="住宿">住宿</button>
+                </div>
+              </div>
 
               <div class="receipt-box">
                 <div class="receipt-top">
                   <div>
                     <span>收据照片</span>
-                    <p>拍照或从相簿选图，系统会先把照片变清楚再读取。</p>
+                    <p>拍照或选照片，系统会读金额；原照片也会压小后保存在记录里。</p>
                   </div>
                   <label class="receipt-button">
                     拍照 / 相簿
@@ -92,55 +147,62 @@
                   <img class="receipt-image" alt="收据预览" />
                   <div>
                     <strong class="receipt-status">已选择照片</strong>
-                    <p class="receipt-hint">照片会先自动调清楚，再读取金额和商家。</p>
+                    <p class="receipt-hint">请确认金额有没有读错，再按新增消费。</p>
                   </div>
                 </div>
               </div>
 
-              <div class="category-picker" role="radiogroup" aria-label="选择分类">
-                <button class="category-choice active" type="button" data-category="餐饮">餐饮</button>
-                <button class="category-choice" type="button" data-category="交通">交通</button>
-                <button class="category-choice" type="button" data-category="购物">购物</button>
-                <button class="category-choice" type="button" data-category="学习">学习</button>
-                <button class="category-choice" type="button" data-category="娱乐">娱乐</button>
-                <button class="category-choice" type="button" data-category="生活">生活</button>
-                <button class="category-choice income-only" type="button" data-category="薪水">薪水</button>
-                <button class="category-choice income-only" type="button" data-category="生意">生意</button>
-              </div>
-
               <div class="form-actions">
-                <button class="submit-button" type="submit">新增记录</button>
+                <button class="submit-button" type="submit">新增消费</button>
                 <button class="reset-button" type="button">重设示例</button>
               </div>
               <p class="form-note" role="status"></p>
             </form>
           </section>
 
-          <section class="budget-panel" aria-labelledby="budget-title">
+          <section class="income-panel" aria-labelledby="income-title">
             <div class="panel-heading compact">
               <div>
-                <p class="eyebrow">本月预算</p>
-                <h2 id="budget-title">控制花费</h2>
+                <p class="eyebrow">自动收入</p>
+                <h2 id="income-title">每月固定收入</h2>
               </div>
-              <strong class="budget-status">健康</strong>
+              <strong class="plan-year-label">2026</strong>
             </div>
 
-            <div class="budget-ring" aria-label="预算使用比例">
+            <div class="income-form">
+              <label>
+                每个月会收入多少
+                <input class="monthly-income-input" type="number" min="0" step="50" placeholder="例如 2600" />
+              </label>
+              <label>
+                钱的来源
+                <select class="income-source-select">
+                  <option value="薪水">薪水</option>
+                  <option value="生意">生意</option>
+                  <option value="兼职">兼职</option>
+                  <option value="家人">家人</option>
+                  <option value="投资">投资</option>
+                  <option value="其他">其他</option>
+                </select>
+              </label>
+              <label class="budget-control">
+                每月消费预算
+                <input class="budget-slider" type="range" min="300" max="8000" step="50" value="1200" />
+                <span class="budget-amount">RM 1,200.00</span>
+              </label>
+            </div>
+
+            <div class="budget-status-box">
+              <div class="budget-ring" aria-label="预算使用比例">
+                <div>
+                  <span>已用</span>
+                  <strong class="used-percent">0%</strong>
+                </div>
+              </div>
               <div>
-                <span>已用</span>
-                <strong class="used-percent">0%</strong>
+                <span class="budget-status">健康</span>
+                <p class="plan-note">这个收入设定会自动用在所选年份的每个月。</p>
               </div>
-            </div>
-
-            <label class="budget-control">
-              预算上限
-              <input class="budget-slider" type="range" min="400" max="5000" step="50" value="1200" />
-              <span class="budget-amount">RM 1,200.00</span>
-            </label>
-
-            <div class="cashflow-box">
-              <span>收入 - 支出</span>
-              <strong class="cashflow-amount">RM 0.00</strong>
             </div>
           </section>
         </section>
@@ -167,33 +229,14 @@
           <p class="sync-note">未登入时先保存在本机；登入后才同步到你的 Supabase。</p>
         </section>
 
-        <section class="overview-grid" aria-label="本月总览">
-          <article class="metric-card highlight">
-            <span>本月剩余预算</span>
-            <strong class="remaining-amount">RM 0.00</strong>
-          </article>
-          <article class="metric-card">
-            <span>本月支出</span>
-            <strong class="spent-amount">RM 0.00</strong>
-          </article>
-          <article class="metric-card">
-            <span>本月收入</span>
-            <strong class="income-amount">RM 0.00</strong>
-          </article>
-          <article class="metric-card">
-            <span>记录数</span>
-            <strong class="entry-count">0 笔</strong>
-          </article>
-        </section>
-
         <section class="secondary-grid">
           <section class="ledger-panel" aria-labelledby="ledger-title">
             <div class="panel-heading compact">
               <div>
-                <p class="eyebrow">最近记录</p>
-                <h2 id="ledger-title">流水账</h2>
+                <p class="eyebrow">本月记录</p>
+                <h2 id="ledger-title">消费流水</h2>
               </div>
-              <span class="saved-label">自动保存在这台电脑</span>
+              <span class="saved-label">照片会跟着记录保存</span>
             </div>
             <div class="transaction-list"></div>
           </section>
@@ -204,14 +247,39 @@
                 <p class="eyebrow">分类统计</p>
                 <h2 id="report-title">钱花在哪里</h2>
               </div>
-              <button class="clear-button" type="button">清空全部</button>
+              <button class="clear-button" type="button">清空本月</button>
             </div>
             <div class="category-report"></div>
             <div class="insight-box">
               <strong class="top-category">最大支出：餐饮</strong>
-              <p class="saving-tip">先保持简单：自己记录每天花在哪里，慢慢看出习惯。</p>
+              <p class="saving-tip">先记录一个月，就会看出自己的消费习惯。</p>
             </div>
           </section>
+        </section>
+
+        <section class="annual-panel" aria-labelledby="annual-title">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">年度报表</p>
+              <h2 id="annual-title">今年赚了多少，花了多少</h2>
+            </div>
+            <span class="annual-period-label">年度累计</span>
+          </div>
+          <div class="annual-summary">
+            <article>
+              <span>年度收入</span>
+              <strong class="annual-income">RM 0.00</strong>
+            </article>
+            <article>
+              <span>年度消费</span>
+              <strong class="annual-expense">RM 0.00</strong>
+            </article>
+            <article>
+              <span>年度储蓄</span>
+              <strong class="annual-saving">RM 0.00</strong>
+            </article>
+          </div>
+          <div class="annual-bars"></div>
         </section>
       </main>
     </div>
