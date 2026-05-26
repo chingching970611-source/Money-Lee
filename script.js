@@ -626,6 +626,7 @@ const renderFormMode = () => {
 const updateEntryDateForSelectedMonth = () => {
   const dateInput = document.querySelector(".entry-date");
   if (!dateInput) return;
+  if (document.activeElement === dateInput || state.editingExpenseId) return;
 
   const currentKey = monthKey(currentYear, currentMonth);
   dateInput.value = selectedKey() === currentKey ? today : monthStart();

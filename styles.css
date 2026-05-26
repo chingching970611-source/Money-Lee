@@ -370,6 +370,10 @@ button:focus-visible {
   gap: 12px;
 }
 
+.date-field {
+  max-width: 260px;
+}
+
 .choice-block {
   display: grid;
   gap: 9px;
@@ -1459,6 +1463,10 @@ button:focus-visible {
 
   .form-row {
     grid-template-columns: 1fr;
+  }
+
+  .date-field {
+    max-width: none;
   }
 
   .source-picker,
