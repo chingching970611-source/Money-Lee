@@ -11,11 +11,12 @@ const categoryColors = {
   娱乐: "#8f74d9",
   生活: "#a86f45",
   家用: "#e5a33a",
+  情侣消费: "#ef7aa8",
   健康: "#e36f88",
   住宿: "#6876d8",
 };
 
-const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "健康", "住宿"];
+const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "情侣消费", "健康", "住宿"];
 const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Atome", "Shopee", "Cash", "其他"];
 const defaultMoneySource = "Debit Card";
 const sourceAliases = {
