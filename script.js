@@ -961,6 +961,7 @@ const renderAnnualReport = () => {
   const plan = getSelectedPlan();
   const monthLimit = state.selectedMonth;
   const months = Array.from({ length: 12 }, (_, index) => index + 1);
+  const visibleMonths = months.filter((month) => month <= monthLimit);
   const annualExpense = months
     .filter((month) => month <= monthLimit)
     .reduce((sum, month) => sum + total(monthSpendingItems(state.selectedYear, month)), 0);
@@ -983,16 +984,15 @@ const renderAnnualReport = () => {
   const annualBars = document.querySelector(".annual-bars");
   if (!annualBars) return;
 
-  annualBars.innerHTML = months
+  annualBars.innerHTML = visibleMonths
     .map((month) => {
       const spending = total(monthSpendingItems(state.selectedYear, month));
       const income = monthlyIncome(month);
-      const muted = month > monthLimit;
       const incomeWidth = Math.max((income / biggest) * 100, income ? 4 : 0);
       const expenseWidth = Math.max((spending / biggest) * 100, spending ? 4 : 0);
 
       return `
-        <article class="annual-row ${muted ? "muted" : ""}">
+        <article class="annual-row">
           <span>${month}月</span>
           <div class="annual-track-group">
             <div class="annual-track income-track" aria-label="${month}月收入">
@@ -1002,7 +1002,7 @@ const renderAnnualReport = () => {
               <span style="--bar-width: ${expenseWidth}%"></span>
             </div>
           </div>
-          <strong>${muted ? "未到" : money(income - spending)}</strong>
+          <strong>${money(income - spending)}</strong>
         </article>
       `;
     })
