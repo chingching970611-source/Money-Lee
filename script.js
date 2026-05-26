@@ -622,16 +622,6 @@ const renderTransactions = () => {
               <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
               <p>${item.isFixed ? "每月固定" : cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)}</p>
               ${item.isFixed ? '<p class="receipt-ref">每个月自动算进支出</p>' : ""}
-              ${
-                !item.isFixed && item.reference
-                  ? `<p class="receipt-ref">付款/收据号：${cleanText(item.reference)}</p>`
-                  : ""
-              }
-              ${
-                !item.isFixed && item.merchant && item.title && item.title !== item.merchant
-                  ? `<p class="receipt-ref">内容：${cleanText(item.title)}</p>`
-                  : ""
-              }
             </div>
           </div>
           <div class="amount-group">
@@ -1153,17 +1143,13 @@ const guessReceiptCategory = (text) => {
   return match ? match[0] : "生活";
 };
 
-const applyReceiptResult = ({ amount, merchant, reference, date, category }) => {
+const applyReceiptResult = ({ amount, merchant, date, category }) => {
   const amountInput = document.querySelector(".entry-amount");
-  const titleInput = document.querySelector(".entry-title");
   const merchantInput = document.querySelector(".entry-merchant");
-  const referenceInput = document.querySelector(".entry-reference");
   const dateField = document.querySelector(".entry-date");
 
   if (amountInput && amount) amountInput.value = amount.toFixed(2);
-  if (titleInput && merchant && !titleInput.value.trim()) titleInput.value = merchant;
   if (merchantInput && merchant) merchantInput.value = merchant;
-  if (referenceInput && reference) referenceInput.value = reference;
   if (dateField && date) {
     dateField.value = date;
     const parts = getDateParts(date);
@@ -1226,9 +1212,8 @@ receiptInput?.addEventListener("change", async (event) => {
 
     if (result.amount || result.merchant) {
       const details = [
-        result.amount ? `金额 ${money(result.amount)}` : "",
+        result.amount ? `价格 ${money(result.amount)}` : "",
         result.merchant ? `公司 ${result.merchant}` : "",
-        result.reference ? `号码 ${result.reference}` : "",
       ].filter(Boolean);
 
       const shouldAutoSave = document.querySelector(".receipt-auto-save")?.checked && result.amount && result.merchant;
@@ -1525,9 +1510,8 @@ function getExpenseSourceFromForm() {
 
 function clearExpenseForm() {
   document.querySelector(".entry-amount").value = "";
-  document.querySelector(".entry-title").value = "";
-  document.querySelector(".entry-merchant").value = "";
-  document.querySelector(".entry-reference").value = "";
+  const merchantInput = document.querySelector(".entry-merchant");
+  if (merchantInput) merchantInput.value = "";
   updateEntryDateForSelectedMonth();
   resetReceiptPreview();
   state.editingExpenseId = null;
@@ -1535,10 +1519,10 @@ function clearExpenseForm() {
 
 function fillExpenseForm(item) {
   document.querySelector(".entry-amount").value = item.amount || "";
-  document.querySelector(".entry-title").value = item.title || "";
-  document.querySelector(".entry-merchant").value = item.merchant || "";
-  document.querySelector(".entry-reference").value = item.reference || "";
-  document.querySelector(".entry-date").value = item.date || monthStart();
+  const merchantInput = document.querySelector(".entry-merchant");
+  const dateInput = document.querySelector(".entry-date");
+  if (merchantInput) merchantInput.value = item.merchant || item.title || "";
+  if (dateInput) dateInput.value = item.date || monthStart();
   state.selectedCategory = expenseCategories.includes(item.category) ? item.category : "生活";
   const formSource = splitSourceForForm(item.source);
   state.selectedSource = formSource.selectedSource;
@@ -1552,7 +1536,7 @@ function fillExpenseForm(item) {
   if (item.receiptImage) {
     if (receiptImage) receiptImage.src = item.receiptImage;
     if (receiptPreview) receiptPreview.hidden = false;
-    setReceiptMessage("已载入原本收据", "可以修改金额、分类、公司名或号码。");
+    setReceiptMessage("已载入原本收据", "可以修改价格、公司名或分类。");
   } else {
     if (receiptPreview) receiptPreview.hidden = true;
   }
@@ -1575,9 +1559,7 @@ function startExpenseEdit(id) {
 
 function saveExpenseFromForm(options = {}) {
   const amountInput = document.querySelector(".entry-amount");
-  const titleInput = document.querySelector(".entry-title");
   const merchantInput = document.querySelector(".entry-merchant");
-  const referenceInput = document.querySelector(".entry-reference");
   const dateField = document.querySelector(".entry-date");
   const amount = Number(amountInput.value);
   const date = dateField.value || monthStart();
@@ -1590,8 +1572,8 @@ function saveExpenseFromForm(options = {}) {
   ensurePlanFor(state, state.selectedYear);
 
   const merchant = merchantInput.value.trim();
-  const reference = referenceInput.value.trim();
-  const title = titleInput.value.trim() || merchant || state.selectedCategory;
+  const reference = "";
+  const title = merchant || state.selectedCategory;
   const existing = state.editingExpenseId
     ? state.transactions.find((item) => String(item.id) === String(state.editingExpenseId))
     : null;
@@ -1650,7 +1632,6 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
         info.innerHTML = `
           <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
           <p>${cleanText(item.date)} · ${cleanText(item.source)} · ${cleanText(item.category)} · ${money(item.amount)}</p>
-          ${item.reference ? `<p>付款/收据号：${cleanText(item.reference)}</p>` : ""}
         `;
       }
       if (modal) modal.hidden = false;
@@ -1783,7 +1764,7 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 });
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
-  const header = "日期,类型,来源,分类,公司店名,付款收据号码,内容,金额,有收据";
+  const header = "日期,类型,来源,分类,公司店名,金额,有收据";
   const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) =>
     monthFixedExpenses(state.selectedYear, index + 1),
   ).flat();
@@ -1794,8 +1775,6 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
       item.source,
       item.category,
       item.merchant || "",
-      item.reference || "",
-      item.title,
       item.amount,
       item.type === "expense" && item.receiptImage ? "有" : "无",
     ]
