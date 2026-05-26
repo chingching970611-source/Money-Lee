@@ -118,14 +118,19 @@
               </div>
 
               <div class="choice-block">
-                <span>钱从哪里来</span>
-                <div class="source-picker" role="radiogroup" aria-label="选择消费来源">
-                  <button class="source-choice active" type="button" data-source="电子钱包">电子钱包</button>
-                  <button class="source-choice" type="button" data-source="银行户口">银行户口</button>
-                  <button class="source-choice" type="button" data-source="银行扣账">银行扣账</button>
-                  <button class="source-choice" type="button" data-source="现金">现金</button>
+                <span>付款方式 / 扣哪里</span>
+                <div class="source-picker" role="radiogroup" aria-label="选择付款方式">
+                  <button class="source-choice active" type="button" data-source="Debit Card">Debit Card</button>
+                  <button class="source-choice" type="button" data-source="Credit Card">Credit Card</button>
+                  <button class="source-choice" type="button" data-source="TNG">TNG</button>
+                  <button class="source-choice" type="button" data-source="Grab">Grab</button>
+                  <button class="source-choice" type="button" data-source="Cash">Cash</button>
                   <button class="source-choice" type="button" data-source="其他">其他</button>
                 </div>
+                <label class="custom-source-field" hidden>
+                  自己写 app / 来源名字
+                  <input class="custom-source-input" type="text" placeholder="例如 Boost、Maybank、ShopeePay" />
+                </label>
               </div>
 
               <div class="choice-block">

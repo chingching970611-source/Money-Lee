@@ -397,6 +397,13 @@ button:focus-visible {
   border-color: #efb943;
 }
 
+.custom-source-field {
+  padding: 12px;
+  background: #fff8ec;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .receipt-box {
   display: grid;
   gap: 12px;

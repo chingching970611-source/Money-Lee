@@ -15,7 +15,17 @@ const categoryColors = {
 };
 
 const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "健康", "住宿"];
-const moneySources = ["电子钱包", "银行户口", "银行扣账", "现金", "其他"];
+const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Cash", "其他"];
+const defaultMoneySource = "Debit Card";
+const sourceAliases = {
+  电子钱包: "TNG",
+  银行户口: "Debit Card",
+  银行扣账: "Debit Card",
+  现金: "Cash",
+  "Touch n Go": "TNG",
+  "Touch 'n Go": "TNG",
+  "Touch & Go": "TNG",
+};
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
 const defaultPlan = { incomeAmount: 0, incomeSource: "薪水", budget: 0 };
@@ -39,7 +49,8 @@ const defaultState = {
   selectedYear: currentYear,
   selectedMonth: currentMonth,
   selectedCategory: "餐饮",
-  selectedSource: "电子钱包",
+  selectedSource: defaultMoneySource,
+  customSource: "",
   yearPlans: {
     [currentYear]: { ...defaultPlan },
   },
@@ -62,6 +73,19 @@ const cleanText = (value) =>
 const setText = (selector, value) => {
   const element = document.querySelector(selector);
   if (element) element.textContent = value;
+};
+
+const normalizeMoneySource = (value) => {
+  const source = String(value || "").trim();
+  if (!source) return defaultMoneySource;
+  return sourceAliases[source] || source;
+};
+
+const splitSourceForForm = (value) => {
+  const source = normalizeMoneySource(value);
+  return moneySources.includes(source)
+    ? { selectedSource: source, customSource: "" }
+    : { selectedSource: "其他", customSource: source };
 };
 
 const normalizePlan = (plan = {}) => {
@@ -114,9 +138,7 @@ const normalizeExpense = (item, index) => {
   if (!Number.isFinite(amount) || amount <= 0) return null;
 
   const category = expenseCategories.includes(item.category) ? item.category : "生活";
-  const source = moneySources.includes(item.source || item.moneySource || item.money_source)
-    ? item.source || item.moneySource || item.money_source
-    : "电子钱包";
+  const source = normalizeMoneySource(item.source || item.moneySource || item.money_source);
 
   return {
     id: item.id ?? Date.now() + index,
@@ -177,7 +199,9 @@ const migrateState = (saved) => {
     : "dashboard";
   next.editingExpenseId = null;
   next.selectedCategory = expenseCategories.includes(next.selectedCategory) ? next.selectedCategory : "餐饮";
-  next.selectedSource = moneySources.includes(next.selectedSource) ? next.selectedSource : "电子钱包";
+  const formSource = splitSourceForForm(next.selectedSource);
+  next.selectedSource = formSource.selectedSource;
+  next.customSource = String(next.customSource || formSource.customSource || "").trim();
   next.yearPlans = {};
 
   Object.entries(saved?.yearPlans || {}).forEach(([year, plan]) => {
@@ -296,6 +320,14 @@ const updateSelectedButtons = () => {
   document.querySelectorAll(".source-choice").forEach((button) => {
     button.classList.toggle("active", button.dataset.source === state.selectedSource);
   });
+
+  const customSourceField = document.querySelector(".custom-source-field");
+  const customSourceInput = document.querySelector(".custom-source-input");
+  const needsCustomSource = state.selectedSource === "其他";
+  if (customSourceField) customSourceField.hidden = !needsCustomSource;
+  if (customSourceInput && document.activeElement !== customSourceInput) {
+    customSourceInput.value = needsCustomSource ? state.customSource || "" : "";
+  }
 };
 
 const renderView = () => {
@@ -1087,10 +1119,16 @@ document.querySelectorAll(".category-choice").forEach((button) => {
 
 document.querySelectorAll(".source-choice").forEach((button) => {
   button.addEventListener("click", () => {
-    state.selectedSource = button.dataset.source || "电子钱包";
+    state.selectedSource = button.dataset.source || defaultMoneySource;
+    if (state.selectedSource !== "其他") state.customSource = "";
     saveState();
     render();
   });
+});
+
+document.querySelector(".custom-source-input")?.addEventListener("input", (event) => {
+  state.customSource = event.target.value;
+  saveState();
 });
 
 document.querySelectorAll(".nav-button").forEach((button) => {
@@ -1157,6 +1195,18 @@ document.querySelector(".extra-income-form")?.addEventListener("submit", async (
   setText(".form-note", `已加入本月额外收入：${money(amount)}`);
 });
 
+function getExpenseSourceFromForm() {
+  if (state.selectedSource !== "其他") {
+    state.customSource = "";
+    return state.selectedSource || defaultMoneySource;
+  }
+
+  const customSourceInput = document.querySelector(".custom-source-input");
+  const customSource = String(customSourceInput?.value || state.customSource || "").trim();
+  state.customSource = customSource;
+  return customSource || "其他";
+}
+
 function clearExpenseForm() {
   document.querySelector(".entry-amount").value = "";
   document.querySelector(".entry-title").value = "";
@@ -1174,7 +1224,9 @@ function fillExpenseForm(item) {
   document.querySelector(".entry-reference").value = item.reference || "";
   document.querySelector(".entry-date").value = item.date || monthStart();
   state.selectedCategory = expenseCategories.includes(item.category) ? item.category : "生活";
-  state.selectedSource = moneySources.includes(item.source) ? item.source : "电子钱包";
+  const formSource = splitSourceForForm(item.source);
+  state.selectedSource = formSource.selectedSource;
+  state.customSource = formSource.customSource;
   pendingReceipt = {
     image: item.receiptImage || "",
     text: item.receiptText || "",
@@ -1238,7 +1290,7 @@ function saveExpenseFromForm(options = {}) {
     merchant,
     reference,
     category: state.selectedCategory,
-    source: state.selectedSource,
+    source: getExpenseSourceFromForm(),
     amount,
     date,
     receiptText: pendingReceipt.text || transaction.receiptText || "",
