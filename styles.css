@@ -1,18 +1,18 @@
 :root {
-  --ink: #17211d;
-  --muted: #66736d;
-  --line: #d9e3dd;
-  --paper: #f5f7f3;
-  --panel: #ffffff;
-  --soft: #eef4ef;
-  --green: #2d7d57;
-  --mint: #b9e6c9;
-  --amber: #d9a72f;
-  --coral: #ff8668;
-  --blue: #5ba6e6;
-  --violet: #8f74d9;
-  --danger: #a94532;
-  --shadow: 0 18px 48px rgba(23, 33, 29, 0.08);
+  --ink: #1f271f;
+  --muted: #7b6f63;
+  --line: #efdcc6;
+  --paper: #fff8ee;
+  --panel: #fffdf9;
+  --soft: #fff0d6;
+  --green: #2f8b63;
+  --mint: #cdeed5;
+  --amber: #ffcf5c;
+  --coral: #ff7a66;
+  --blue: #79b7f2;
+  --violet: #b393f2;
+  --danger: #c55240;
+  --shadow: 0 16px 38px rgba(118, 75, 32, 0.12);
 }
 
 * {
@@ -28,7 +28,7 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(245, 247, 243, 0.96) 360px),
+    linear-gradient(180deg, #fff0c9 0, #fff8ee 280px, #f8fbef 100%),
     var(--paper);
   font-family: "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
 }
@@ -71,8 +71,8 @@ a {
   justify-content: space-between;
   gap: 16px;
   padding: 16px 0;
-  background: rgba(245, 247, 243, 0.9);
-  border-bottom: 1px solid rgba(217, 227, 221, 0.92);
+  background: rgba(255, 248, 238, 0.9);
+  border-bottom: 1px solid rgba(239, 220, 198, 0.92);
   backdrop-filter: blur(18px);
 }
 
@@ -100,8 +100,8 @@ a {
   width: 42px;
   height: 42px;
   place-items: center;
-  color: #fff;
-  background: var(--ink);
+  color: var(--ink);
+  background: var(--amber);
   border-radius: 8px;
 }
 
@@ -165,7 +165,7 @@ p {
 
 h1 {
   margin-bottom: 10px;
-  font-size: clamp(2.3rem, 5vw, 4rem);
+  font-size: 3.4rem;
   line-height: 1.03;
   letter-spacing: 0;
 }
@@ -184,7 +184,6 @@ h2 {
 .transaction-row p,
 .saving-tip,
 .form-note,
-.sync-note,
 .budget-control,
 .report-label span,
 .annual-row strong {
@@ -225,8 +224,7 @@ h2 {
 .period-fields label,
 .entry-form label,
 .income-form label,
-.extra-income-form label,
-.sync-grid label {
+.extra-income-form label {
   display: grid;
   gap: 8px;
   color: var(--ink);
@@ -261,7 +259,6 @@ button:focus-visible {
 .metric-card,
 .record-panel,
 .income-panel,
-.sync-panel,
 .ledger-panel,
 .report-panel,
 .annual-panel {
@@ -279,8 +276,8 @@ button:focus-visible {
 }
 
 .metric-card.highlight {
-  color: #fff;
-  background: var(--ink);
+  color: var(--ink);
+  background: linear-gradient(135deg, #ffcf5c, #ff927f);
 }
 
 .metric-card span {
@@ -290,7 +287,7 @@ button:focus-visible {
 }
 
 .metric-card strong {
-  font-size: clamp(1.45rem, 2vw, 1.8rem);
+  font-size: 1.72rem;
   line-height: 1.1;
 }
 
@@ -311,7 +308,6 @@ button:focus-visible {
 
 .record-panel,
 .income-panel,
-.sync-panel,
 .ledger-panel,
 .report-panel,
 .annual-panel {
@@ -334,7 +330,6 @@ button:focus-visible {
 
 .plan-year-label,
 .budget-status,
-.cloud-status,
 .annual-period-label,
 .selected-period-label {
   padding: 8px 10px;
@@ -387,16 +382,16 @@ button:focus-visible {
 
 .source-choice.active,
 .category-choice.active {
-  color: #fff;
-  background: var(--ink);
-  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--amber);
+  border-color: #efb943;
 }
 
 .receipt-box {
   display: grid;
   gap: 12px;
   padding: 14px;
-  background: #f7faf6;
+  background: #fff8ec;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -421,8 +416,8 @@ button:focus-visible {
   justify-content: center;
   min-height: 44px;
   padding: 0 16px;
-  color: #fff;
-  background: var(--ink);
+  color: var(--ink);
+  background: var(--amber);
   border: 0;
   flex: 0 0 auto;
   cursor: pointer;
@@ -460,7 +455,7 @@ button:focus-visible {
   min-height: 50px;
   padding: 0 20px;
   color: #fff;
-  background: var(--green);
+  background: linear-gradient(135deg, var(--green), #55b47d);
   border: 0;
 }
 
@@ -485,7 +480,7 @@ button:focus-visible {
   gap: 12px;
   margin-top: 18px;
   padding: 14px;
-  background: #f7faf6;
+  background: #fff8ec;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -517,7 +512,7 @@ button:focus-visible {
 .extra-income-button {
   min-height: 44px;
   color: #fff;
-  background: var(--green);
+  background: linear-gradient(135deg, var(--green), #55b47d);
   border: 0;
 }
 
@@ -545,7 +540,7 @@ button:focus-visible {
   gap: 16px;
   margin-top: 18px;
   padding: 14px;
-  background: var(--soft);
+  background: #fff4dc;
   border-radius: 8px;
 }
 
@@ -591,53 +586,8 @@ button:focus-visible {
   font-weight: 800;
 }
 
-.sync-panel,
 .annual-panel {
   margin-top: 14px;
-}
-
-.sync-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.7fr) minmax(280px, 1fr);
-  gap: 12px;
-  align-items: end;
-}
-
-.sync-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.sync-login-button,
-.sync-now-button,
-.sync-logout-button {
-  min-height: 44px;
-  padding: 0 16px;
-  color: #fff;
-  background: var(--ink);
-  border: 0;
-}
-
-.sync-now-button {
-  background: var(--green);
-}
-
-.sync-logout-button {
-  color: var(--ink);
-  background: #fff;
-  border: 1px solid var(--line);
-}
-
-.cloud-status.connected {
-  color: #1f5a3d;
-  background: var(--mint);
-  border-color: var(--mint);
-}
-
-.sync-note {
-  margin: 12px 0 0;
-  font-weight: 800;
 }
 
 .transaction-list,
@@ -766,13 +716,13 @@ button:focus-visible {
 
 .insight-box {
   margin-top: 14px;
-  color: #fff;
-  background: #17352a;
+  color: var(--ink);
+  background: #ffe8b6;
 }
 
 .insight-box p {
   margin: 6px 0 0;
-  color: #c7e8d0;
+  color: #765b35;
 }
 
 .annual-summary {
@@ -845,8 +795,15 @@ button:focus-visible {
 }
 
 @media (max-width: 640px) {
+  body {
+    background:
+      linear-gradient(180deg, #ffcf5c 0, #fff2d6 210px, #fff8ee 520px, #f8fbef 100%),
+      var(--paper);
+  }
+
   .app-shell {
-    padding-inline: 12px;
+    padding-inline: 14px;
+    padding-bottom: 28px;
   }
 
   .brand span:last-child,
@@ -856,6 +813,10 @@ button:focus-visible {
 
   .app-header {
     gap: 10px;
+    margin-inline: -14px;
+    padding: 12px 14px;
+    background: rgba(255, 207, 92, 0.9);
+    border-bottom-color: rgba(137, 91, 28, 0.16);
   }
 
   .header-actions {
@@ -867,16 +828,80 @@ button:focus-visible {
     padding: 0 10px;
   }
 
+  .app-titlebar {
+    gap: 14px;
+    padding-top: 18px;
+  }
+
+  h1 {
+    font-size: 2.45rem;
+  }
+
+  h2 {
+    font-size: 1.32rem;
+  }
+
+  .title-note {
+    font-size: 0.96rem;
+  }
+
+  .month-control {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    align-items: end;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(255, 253, 249, 0.92);
+  }
+
+  .period-fields {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .period-fields label {
+    font-size: 0.86rem;
+  }
+
+  .period-fields select {
+    min-height: 44px;
+    padding-inline: 10px;
+  }
+
+  .month-arrow {
+    width: 42px;
+  }
+
+  .overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .metric-card {
+    min-height: 96px;
+    padding: 16px;
+  }
+
+  .metric-card.highlight {
+    grid-column: span 2;
+  }
+
+  .metric-card:last-child {
+    grid-column: span 2;
+  }
+
+  .metric-card strong {
+    font-size: 1.45rem;
+  }
+
   .record-panel,
   .income-panel,
-  .sync-panel,
   .ledger-panel,
   .report-panel,
   .annual-panel {
     padding: 16px;
   }
 
-  .month-control,
   .panel-heading,
   .form-row,
   .receipt-top,
@@ -889,15 +914,32 @@ button:focus-visible {
   }
 
   .period-fields,
-  .sync-grid,
   .extra-income-grid,
   .annual-summary {
     grid-template-columns: 1fr;
   }
 
+  .period-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .source-picker,
   .category-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .source-choice,
+  .category-choice {
+    min-height: 48px;
+    background: #fffaf2;
+  }
+
+  .record-panel,
+  .income-panel,
+  .ledger-panel,
+  .report-panel,
+  .annual-panel {
+    border-color: rgba(137, 91, 28, 0.18);
   }
 
   .receipt-button {

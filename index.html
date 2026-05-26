@@ -154,7 +154,7 @@
 
               <div class="form-actions">
                 <button class="submit-button" type="submit">新增消费</button>
-                <button class="reset-button" type="button">重设示例</button>
+                <button class="reset-button" type="button">清空重来</button>
               </div>
               <p class="form-note" role="status"></p>
             </form>
@@ -236,28 +236,6 @@
           </section>
         </section>
 
-        <section class="sync-panel" aria-labelledby="sync-title">
-          <div class="panel-heading compact">
-            <div>
-              <p class="eyebrow">云端同步</p>
-              <h2 id="sync-title">Supabase</h2>
-            </div>
-            <span class="cloud-status">本机保存</span>
-          </div>
-          <div class="sync-grid">
-            <label>
-              Email
-              <input class="sync-email" type="email" placeholder="输入你的 email" autocomplete="email" />
-            </label>
-            <div class="sync-actions">
-              <button class="sync-login-button" type="button">发送登入链接</button>
-              <button class="sync-now-button" type="button" hidden>立即同步</button>
-              <button class="sync-logout-button" type="button" hidden>退出云端</button>
-            </div>
-          </div>
-          <p class="sync-note">未登入时先保存在本机；登入后才同步到你的 Supabase。</p>
-        </section>
-
         <section class="secondary-grid">
           <section class="ledger-panel" aria-labelledby="ledger-title">
             <div class="panel-heading compact">
@@ -314,7 +292,6 @@
     </div>
 
     <script src="vendor/tesseract/tesseract.min.js"></script>
-    <script src="vendor/supabase/supabase.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

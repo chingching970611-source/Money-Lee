@@ -1,11 +1,10 @@
-const CACHE_NAME = "xiaoqianben-app-v15";
+const CACHE_NAME = "xiaoqianben-app-v16";
 const APP_FILES = [
   "./",
   "./index.html",
   "./styles.css",
   "./script.js",
   "./manifest.webmanifest",
-  "./vendor/supabase/supabase.js",
   "./vendor/tesseract/tesseract.min.js",
   "./vendor/tesseract/worker.min.js",
   "./vendor/tesseract-core/tesseract-core-simd-lstm.js",
