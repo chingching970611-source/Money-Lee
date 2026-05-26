@@ -596,19 +596,27 @@ const chartGradient = (entries) => {
 
 const updateSelectedButtons = () => {
   document.querySelectorAll(".category-choice").forEach((button) => {
-    button.classList.toggle("active", button.dataset.category === state.selectedCategory);
+    const active = button.dataset.category === state.selectedCategory;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 
   document.querySelectorAll(".source-choice").forEach((button) => {
-    button.classList.toggle("active", button.dataset.source === state.selectedSource);
+    const active = button.dataset.source === state.selectedSource;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 
   document.querySelectorAll(".need-choice").forEach((button) => {
-    button.classList.toggle("active", button.dataset.need === state.selectedNeed);
+    const active = button.dataset.need === state.selectedNeed;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 
   document.querySelectorAll(".saving-choice").forEach((button) => {
-    button.classList.toggle("active", normalizeAffectsSaving(button.dataset.affectsSaving) === state.selectedAffectsSaving);
+    const active = normalizeAffectsSaving(button.dataset.affectsSaving) === state.selectedAffectsSaving;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 
   const customSourceField = document.querySelector(".custom-source-field");
@@ -1549,6 +1557,34 @@ document.querySelector(".year-select")?.addEventListener("change", (event) => {
 document.querySelector(".month-select")?.addEventListener("change", (event) => {
   state.selectedMonth = Number(event.target.value) || currentMonth;
   updateEntryDateForSelectedMonth();
+  saveState();
+  render();
+});
+
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return;
+  const choice = event.target.closest(".category-choice, .source-choice, .need-choice, .saving-choice");
+  if (!choice) return;
+
+  event.preventDefault();
+
+  if (choice.classList.contains("category-choice")) {
+    state.selectedCategory = choice.dataset.category || "餐饮";
+  }
+
+  if (choice.classList.contains("source-choice")) {
+    state.selectedSource = choice.dataset.source || defaultMoneySource;
+    if (state.selectedSource !== "其他") state.customSource = "";
+  }
+
+  if (choice.classList.contains("need-choice")) {
+    state.selectedNeed = normalizeNeedType(choice.dataset.need);
+  }
+
+  if (choice.classList.contains("saving-choice")) {
+    state.selectedAffectsSaving = normalizeAffectsSaving(choice.dataset.affectsSaving);
+  }
+
   saveState();
   render();
 });

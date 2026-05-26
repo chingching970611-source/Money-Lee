@@ -409,6 +409,9 @@ button:focus-visible {
   text-align: left;
   line-height: 1.15;
   box-shadow: 0 7px 16px rgba(118, 75, 32, 0.05);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .choice-icon {
