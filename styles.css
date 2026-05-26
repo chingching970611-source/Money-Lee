@@ -372,7 +372,7 @@ button:focus-visible {
 
 .choice-block {
   display: grid;
-  gap: 10px;
+  gap: 9px;
 }
 
 .choice-block > span,
@@ -391,22 +391,57 @@ button:focus-visible {
 .source-choice,
 .category-choice,
 .need-choice {
-  min-height: 50px;
-  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 58px;
+  padding: 9px 10px;
   color: var(--ink);
   background: #fff;
   border: 1px solid var(--line);
+  text-align: left;
+  line-height: 1.15;
+  box-shadow: 0 7px 16px rgba(118, 75, 32, 0.05);
+}
+
+.choice-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  color: var(--choice-color, var(--green));
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.choice-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .source-choice.active,
 .category-choice.active {
   color: var(--ink);
-  background: var(--amber);
+  background: #fff1b8;
   border-color: #efb943;
+  box-shadow: inset 0 0 0 1px #efb943, 0 9px 18px rgba(118, 75, 32, 0.09);
+}
+
+.source-choice.active .choice-icon,
+.category-choice.active .choice-icon {
+  color: #245b3e;
 }
 
 .need-picker {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.need-choice {
+  justify-content: center;
+  min-height: 48px;
 }
 
 .need-choice.must.active {
@@ -431,23 +466,52 @@ button:focus-visible {
 .receipt-box {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  background: #fff8ec;
+  padding: 12px;
+  background: #fffaf2;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .receipt-top,
 .receipt-preview {
-  display: flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
+}
+
+.receipt-top {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+
+.receipt-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #245b3e;
+  background: #e1f3dc;
+  border-radius: 8px;
+}
+
+.receipt-mark svg,
+.receipt-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.receipt-copy {
+  min-width: 0;
 }
 
 .receipt-top p,
 .receipt-preview p {
   margin: 4px 0 0;
+  font-size: 0.9rem;
 }
 
 .receipt-button {
@@ -464,6 +528,12 @@ button:focus-visible {
   cursor: pointer;
 }
 
+.receipt-button-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .receipt-input {
   position: absolute;
   inset: 0;
@@ -472,6 +542,7 @@ button:focus-visible {
 }
 
 .receipt-preview {
+  grid-template-columns: 82px minmax(0, 1fr);
   justify-content: flex-start;
   padding-top: 12px;
   border-top: 1px solid var(--line);
@@ -1046,16 +1117,27 @@ button:focus-visible {
 }
 
 .nav-button {
+  display: grid;
+  place-items: center;
+  gap: 3px;
   min-height: 46px;
   padding: 0 8px;
   color: var(--muted);
   background: transparent;
   border: 0;
+  font-size: 0.82rem;
+  line-height: 1.05;
 }
 
 .nav-button.active {
   color: var(--ink);
   background: var(--amber);
+}
+
+.nav-button .choice-icon {
+  width: 19px;
+  height: 19px;
+  color: currentColor;
 }
 
 .receipt-modal {
@@ -1250,17 +1332,29 @@ button:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
   .source-picker,
   .category-picker,
   .need-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .source-choice,
   .category-choice,
   .need-choice {
-    min-height: 48px;
+    min-height: 54px;
+    padding: 8px 9px;
     background: #fffaf2;
+    font-size: 0.92rem;
+  }
+
+  .choice-icon {
+    width: 19px;
+    height: 19px;
   }
 
   .record-panel,
@@ -1273,7 +1367,26 @@ button:focus-visible {
   }
 
   .receipt-button {
+    grid-column: 1 / -1;
     width: 100%;
+  }
+
+  .receipt-top {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .receipt-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .receipt-preview {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+
+  .receipt-image {
+    width: 62px;
+    height: 62px;
   }
 
   .budget-ring {

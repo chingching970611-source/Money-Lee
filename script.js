@@ -15,9 +15,10 @@ const categoryColors = {
   友谊社交: "#4fb7a6",
   健康: "#e36f88",
   住宿: "#6876d8",
+  其他: "#8c7b6d",
 };
 
-const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "情侣消费", "友谊社交", "健康", "住宿"];
+const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "情侣消费", "友谊社交", "健康", "住宿", "其他"];
 const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Atome", "Shopee", "Cash", "其他"];
 const defaultMoneySource = "Debit Card";
 const sourceAliases = {
@@ -95,6 +96,109 @@ const cleanText = (value) =>
 const setText = (selector, value) => {
   const element = document.querySelector(selector);
   if (element) element.textContent = value;
+};
+
+const iconPaths = {
+  dashboard: '<path d="M4 13.5 12 6l8 7.5" /><path d="M6.5 12.5V20h11v-7.5" /><path d="M10 20v-5h4v5" />',
+  add: '<path d="M12 5v14" /><path d="M5 12h14" />',
+  records: '<path d="M7 3h10a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2V5a2 2 0 0 1 2-2Z" /><path d="M9 8h6" /><path d="M9 12h6" /><path d="M9 16h4" />',
+  reports: '<path d="M4 19V5" /><path d="M4 19h16" /><path d="m7 15 4-4 3 3 5-7" />',
+  couple: '<path d="M12 20s-7-4.2-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 5.8-7 10-7 10Z" /><path d="M9 13h6" />',
+  card: '<rect x="3" y="5" width="18" height="14" rx="3" /><path d="M3 10h18" /><path d="M7 15h4" />',
+  wallet: '<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19v14H6.5A2.5 2.5 0 0 1 4 16.5v-9Z" /><path d="M16 12h5v5h-5a2.5 2.5 0 0 1 0-5Z" />',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M10 18h4" />',
+  bag: '<path d="M6 8h12l-1 12H7L6 8Z" /><path d="M9 8a3 3 0 0 1 6 0" />',
+  cash: '<rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6.5 9.5v5" /><path d="M17.5 9.5v5" />',
+  more: '<circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" />',
+  utensils: '<path d="M4 3v8" /><path d="M8 3v8" /><path d="M4 7h4" /><path d="M6 11v10" /><path d="M17 3c2 2 3 4 3 7a4 4 0 0 1-4 4h-1V3h2Z" /><path d="M16 14v7" />',
+  car: '<path d="m5 12 2-5h10l2 5" /><rect x="3" y="12" width="18" height="6" rx="2" /><circle cx="7" cy="18" r="1.5" /><circle cx="17" cy="18" r="1.5" />',
+  book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5Z" /><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20" />',
+  sparkles: '<path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z" /><path d="m5 14 .8 1.8L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-1.2L5 14Z" /><path d="m19 14 .7 1.5L21 16l-1.3.5L19 18l-.7-1.5L17 16l1.3-.5L19 14Z" />',
+  home: '<path d="m3 11 9-8 9 8" /><path d="M5.5 10v10h13V10" /><path d="M10 20v-5h4v5" />',
+  heart: '<path d="M12 20s-7-4.2-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 5.8-7 10-7 10Z" />',
+  users: '<path d="M16 19a4 4 0 0 0-8 0" /><circle cx="12" cy="8" r="3" /><path d="M21 19a3.5 3.5 0 0 0-4-3.4" /><path d="M3 19a3.5 3.5 0 0 1 4-3.4" />',
+  health: '<path d="M12 21s-7-4.2-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 11c0 5.8-7 10-7 10Z" /><path d="M9 12h6" /><path d="M12 9v6" />',
+  bed: '<path d="M4 11V5" /><path d="M20 19v-6a3 3 0 0 0-3-3H4v9" /><path d="M4 15h16" /><path d="M8 10V7h4v3" />',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-5" />',
+  tag: '<path d="M20 12 12 20 4 12V4h8l8 8Z" /><circle cx="8.5" cy="8.5" r="1.5" />',
+};
+
+const controlIconMap = {
+  dashboard: "dashboard",
+  add: "add",
+  records: "records",
+  reports: "reports",
+  couple: "couple",
+  "Debit Card": "card",
+  "Credit Card": "card",
+  TNG: "wallet",
+  Grab: "phone",
+  Atome: "card",
+  Shopee: "bag",
+  Cash: "cash",
+  其他: "more",
+  餐饮: "utensils",
+  交通: "car",
+  购物: "bag",
+  学习: "book",
+  娱乐: "sparkles",
+  生活: "home",
+  家用: "home",
+  情侣消费: "heart",
+  友谊社交: "users",
+  健康: "health",
+  住宿: "bed",
+  必须: "shield",
+  想要: "sparkles",
+};
+
+const sourceColors = {
+  "Debit Card": "#2f8b63",
+  "Credit Card": "#d88b32",
+  TNG: "#e0a21c",
+  Grab: "#28a268",
+  Atome: "#6d64d8",
+  Shopee: "#e86a3c",
+  Cash: "#5e8d58",
+  其他: "#8c7b6d",
+};
+
+const iconMarkup = (name) => `
+  <svg class="choice-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    ${iconPaths[name] || iconPaths.tag}
+  </svg>
+`;
+
+const decorateButton = (button, key, label, color) => {
+  const iconName = controlIconMap[key] || "tag";
+  const cacheKey = `${iconName}|${label}`;
+  if (button.dataset.iconReady === cacheKey) return;
+  button.dataset.iconReady = cacheKey;
+  button.dataset.label = label;
+  if (color) button.style.setProperty("--choice-color", color);
+  button.innerHTML = `${iconMarkup(iconName)}<span class="choice-label">${cleanText(label)}</span>`;
+};
+
+const decorateChoiceControls = () => {
+  document.querySelectorAll(".source-choice").forEach((button) => {
+    const label = button.dataset.label || button.dataset.source || button.textContent.trim();
+    decorateButton(button, button.dataset.source, label, sourceColors[button.dataset.source]);
+  });
+
+  document.querySelectorAll(".category-choice").forEach((button) => {
+    const label = button.dataset.label || button.dataset.category || button.textContent.trim();
+    decorateButton(button, button.dataset.category, label, categoryColors[button.dataset.category]);
+  });
+
+  document.querySelectorAll(".need-choice").forEach((button) => {
+    const label = button.dataset.label || button.dataset.need || button.textContent.trim();
+    decorateButton(button, button.dataset.need, label);
+  });
+
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    const label = button.dataset.label || button.textContent.trim();
+    decorateButton(button, button.dataset.view, label);
+  });
 };
 
 const normalizeMoneySource = (value) => {
@@ -818,6 +922,7 @@ const renderAnnualReport = () => {
 
 const render = () => {
   ensurePlanFor(state, state.selectedYear);
+  decorateChoiceControls();
   updateSelectedButtons();
   renderView();
   renderFormMode();
