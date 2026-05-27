@@ -640,6 +640,85 @@ const saveState = () => {
   localStorage.setItem("xiaoqianben-data", JSON.stringify(state));
 };
 
+const lockStorageKey = "xiaoqianben-lock";
+
+const getLockConfig = () => {
+  try {
+    return JSON.parse(localStorage.getItem(lockStorageKey)) || null;
+  } catch {
+    return null;
+  }
+};
+
+const saveLockConfig = (config) => {
+  localStorage.setItem(lockStorageKey, JSON.stringify(config));
+};
+
+const randomSalt = () => {
+  const values = new Uint8Array(16);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(values);
+    return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("");
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const fallbackHash = (text) => {
+  let hash = 5381;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 33) ^ text.charCodeAt(index);
+  }
+  return `fallback-${(hash >>> 0).toString(16)}`;
+};
+
+const hashSecret = async (value, salt) => {
+  const text = `${salt}:${String(value || "").trim()}`;
+  if (window.crypto?.subtle && window.TextEncoder) {
+    const bytes = new TextEncoder().encode(text);
+    const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return fallbackHash(text);
+};
+
+const verifySecret = async (value, salt, expectedHash) =>
+  Boolean(value && expectedHash && (await hashSecret(value, salt)) === expectedHash);
+
+const normalizeRecoveryAnswer = (value) => String(value || "").trim().toLowerCase();
+
+const setLockMessage = (message, isError = false) => {
+  const element = document.querySelector(".lock-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+};
+
+const showLockPanel = (panelName) => {
+  document.querySelectorAll("[data-lock-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.lockPanel !== panelName;
+  });
+  setLockMessage("");
+};
+
+const setAppLocked = (locked) => {
+  document.body.classList.toggle("locked", locked);
+  if (!locked) window.scrollTo({ top: 0, behavior: "auto" });
+};
+
+const initAppLock = () => {
+  const config = getLockConfig();
+  setAppLocked(true);
+  showLockPanel(config?.passwordHash ? "unlock" : "setup");
+};
+
+const unlockApp = () => {
+  setAppLocked(false);
+  setLockMessage("");
+  document.querySelectorAll(".app-lock input").forEach((input) => {
+    input.value = "";
+  });
+};
+
 const getSelectedPlan = () => ensurePlanFor(state, state.selectedYear);
 const expenses = () => state.transactions.filter((item) => item.type === "expense");
 const incomeEntries = () => (Array.isArray(state.incomeEntries) ? state.incomeEntries : []);
@@ -1414,6 +1493,125 @@ document.querySelector(".today-label").textContent = new Date().toLocaleDateStri
   year: "numeric",
   month: "long",
   day: "numeric",
+});
+
+document.querySelector(".lock-setup-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const passwordInput = document.querySelector(".lock-setup-password");
+  const confirmInput = document.querySelector(".lock-setup-confirm");
+  const recoveryInput = document.querySelector(".lock-recovery-answer");
+  const password = passwordInput?.value || "";
+  const confirm = confirmInput?.value || "";
+  const recoveryAnswer = normalizeRecoveryAnswer(recoveryInput?.value);
+
+  if (password.length < 4) {
+    setLockMessage("密码至少写 4 个字。", true);
+    passwordInput?.focus();
+    return;
+  }
+
+  if (password !== confirm) {
+    setLockMessage("两次密码不一样，请再确认一次。", true);
+    confirmInput?.focus();
+    return;
+  }
+
+  if (recoveryAnswer.length < 2) {
+    setLockMessage("找回答案至少写 2 个字，忘记密码时会用到。", true);
+    recoveryInput?.focus();
+    return;
+  }
+
+  const passwordSalt = randomSalt();
+  const recoverySalt = randomSalt();
+  saveLockConfig({
+    enabled: true,
+    passwordSalt,
+    passwordHash: await hashSecret(password, passwordSalt),
+    recoverySalt,
+    recoveryHash: await hashSecret(recoveryAnswer, recoverySalt),
+    updatedAt: new Date().toISOString(),
+  });
+
+  unlockApp();
+  setText(".form-note", "密码锁已启用。");
+});
+
+document.querySelector(".lock-unlock-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const config = getLockConfig();
+  const passwordInput = document.querySelector(".lock-password-input");
+  const password = passwordInput?.value || "";
+
+  if (!config?.passwordHash) {
+    showLockPanel("setup");
+    return;
+  }
+
+  if (await verifySecret(password, config.passwordSalt, config.passwordHash)) {
+    unlockApp();
+    return;
+  }
+
+  setLockMessage("密码不对，请再试一次。", true);
+  passwordInput?.focus();
+});
+
+document.querySelector(".forgot-password-button")?.addEventListener("click", () => {
+  showLockPanel("reset");
+});
+
+document.querySelector(".back-unlock-button")?.addEventListener("click", () => {
+  showLockPanel("unlock");
+});
+
+document.querySelector(".lock-reset-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const config = getLockConfig();
+  const answerInput = document.querySelector(".lock-reset-answer");
+  const passwordInput = document.querySelector(".lock-reset-password");
+  const answer = normalizeRecoveryAnswer(answerInput?.value);
+  const newPassword = passwordInput?.value || "";
+
+  if (!config?.recoveryHash) {
+    setLockMessage("这个账号还没有找回答案，请先回到设置密码。", true);
+    return;
+  }
+
+  if (!(await verifySecret(answer, config.recoverySalt, config.recoveryHash))) {
+    setLockMessage("找回答案不对，不能重设密码。", true);
+    answerInput?.focus();
+    return;
+  }
+
+  if (newPassword.length < 4) {
+    setLockMessage("新密码至少写 4 个字。", true);
+    passwordInput?.focus();
+    return;
+  }
+
+  const passwordSalt = randomSalt();
+  saveLockConfig({
+    ...config,
+    passwordSalt,
+    passwordHash: await hashSecret(newPassword, passwordSalt),
+    updatedAt: new Date().toISOString(),
+  });
+
+  showLockPanel("unlock");
+  setLockMessage("密码已重设，请用新密码解锁。");
+});
+
+document.querySelector(".google-login-button")?.addEventListener("click", () => {
+  setLockMessage("Google 登录入口已预留；下一步连接正式 Google 帐号后就能使用。");
+});
+
+document.querySelector(".lock-button")?.addEventListener("click", () => {
+  setAppLocked(true);
+  showLockPanel(getLockConfig()?.passwordHash ? "unlock" : "setup");
 });
 
 const receiptInput = document.querySelector(".receipt-input");
@@ -2601,5 +2799,6 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
   setText(".form-note", "已准备导出消费记录。");
 });
 
+initAppLock();
 updateEntryDateForSelectedMonth();
 render();

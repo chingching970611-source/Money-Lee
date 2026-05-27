@@ -25,7 +25,66 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="locked">
+    <section class="app-lock" aria-label="小钱本安全锁">
+      <div class="lock-card">
+        <div class="lock-brand">
+          <span class="brand-mark">账</span>
+          <div>
+            <p class="eyebrow">安全解锁</p>
+            <h1>小钱本</h1>
+          </div>
+        </div>
+
+        <form class="lock-panel lock-setup-form" data-lock-panel="setup">
+          <h2>设置打开密码</h2>
+          <p>第一次使用先设置密码，之后别人打开链接也不会直接看到你的财务记录。</p>
+          <label>
+            新密码
+            <input class="lock-setup-password" type="password" autocomplete="new-password" placeholder="至少 4 个字" />
+          </label>
+          <label>
+            再输入一次
+            <input class="lock-setup-confirm" type="password" autocomplete="new-password" placeholder="确认密码" />
+          </label>
+          <label>
+            忘记密码找回答案
+            <input class="lock-recovery-answer" type="text" autocomplete="off" placeholder="例如一个只有你知道的答案" />
+          </label>
+          <button class="lock-primary-button" type="submit">启用密码锁</button>
+        </form>
+
+        <form class="lock-panel lock-unlock-form" data-lock-panel="unlock" hidden>
+          <h2>输入密码</h2>
+          <p>解锁后才可以查看账本、银行账户和还债记录。</p>
+          <label>
+            密码
+            <input class="lock-password-input" type="password" autocomplete="current-password" placeholder="输入你的密码" />
+          </label>
+          <button class="lock-primary-button" type="submit">解锁</button>
+          <button class="lock-link-button forgot-password-button" type="button">忘记密码？</button>
+        </form>
+
+        <form class="lock-panel lock-reset-form" data-lock-panel="reset" hidden>
+          <h2>重新设置密码</h2>
+          <p>输入你设置过的找回答案，就可以换一个新密码。</p>
+          <label>
+            找回答案
+            <input class="lock-reset-answer" type="text" autocomplete="off" placeholder="输入找回答案" />
+          </label>
+          <label>
+            新密码
+            <input class="lock-reset-password" type="password" autocomplete="new-password" placeholder="至少 4 个字" />
+          </label>
+          <button class="lock-primary-button" type="submit">重设密码</button>
+          <button class="lock-link-button back-unlock-button" type="button">回到解锁</button>
+        </form>
+
+        <button class="google-login-button" type="button">用 Google 登录（下一步连接）</button>
+        <p class="lock-message" role="status"></p>
+      </div>
+    </section>
+
     <div class="app-shell">
       <header class="app-header">
         <a class="brand" href="#top" aria-label="小钱本首页">
@@ -34,6 +93,7 @@
         </a>
         <div class="header-actions">
           <span class="today-label"></span>
+          <button class="lock-button" type="button">锁定</button>
           <button class="install-button" type="button" hidden>安装应用</button>
           <button class="export-button" type="button">导出记录</button>
         </div>

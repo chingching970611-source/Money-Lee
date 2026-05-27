@@ -33,6 +33,109 @@ body {
   font-family: "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
 }
 
+body.locked {
+  overflow: hidden;
+}
+
+body.locked .app-shell,
+body.locked .receipt-modal {
+  display: none;
+}
+
+.app-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background:
+    radial-gradient(circle at top left, rgba(255, 207, 92, 0.42), transparent 34%),
+    linear-gradient(180deg, #fff0c9 0, #fff8ee 58%, #f8fbef 100%);
+}
+
+body.locked .app-lock {
+  display: flex;
+}
+
+.lock-card {
+  width: min(460px, 100%);
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 22px 60px rgba(96, 61, 24, 0.18);
+}
+
+.lock-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.lock-brand h1 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.lock-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.lock-panel h2 {
+  margin-bottom: 0;
+}
+
+.lock-panel p,
+.lock-message {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-weight: 800;
+}
+
+.lock-panel label {
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.lock-primary-button,
+.google-login-button {
+  width: 100%;
+  min-height: 48px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--green), #55b47d);
+  border: 0;
+}
+
+.lock-link-button {
+  width: 100%;
+  color: var(--green);
+  background: #f1faef;
+  border: 1px solid #cae7c6;
+}
+
+.google-login-button {
+  margin-top: 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.lock-message {
+  min-height: 24px;
+  margin-top: 10px;
+}
+
+.lock-message.error {
+  color: var(--danger);
+}
+
 button,
 input,
 select {
@@ -131,6 +234,7 @@ button,
 
 .export-button,
 .install-button,
+.lock-button,
 .reset-button,
 .clear-button,
 .month-arrow,
@@ -146,6 +250,12 @@ button,
   color: #fff;
   background: var(--ink);
   border-color: var(--ink);
+}
+
+.lock-button {
+  color: #245b3e;
+  background: #f1faef;
+  border-color: #cae7c6;
 }
 
 .app-titlebar {
@@ -1463,8 +1573,13 @@ button:focus-visible {
   }
 
   .export-button,
-  .install-button {
+  .install-button,
+  .lock-button {
     padding: 0 10px;
+  }
+
+  .lock-card {
+    padding: 18px;
   }
 
   .app-titlebar {
