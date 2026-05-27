@@ -80,6 +80,7 @@ const defaultState = {
   incomeEntries: [],
   fixedExpenses: [],
   debts: [],
+  debtPayments: [],
   couple: {
     myName: "",
     partnerName: "",
@@ -326,6 +327,10 @@ const ensureBankData = (target) => {
     if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
   });
 
+  (target.debtPayments || []).forEach((item) => {
+    if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
+  });
+
   return target;
 };
 
@@ -457,7 +462,8 @@ const getDebtName = (item = {}) => {
 
 const normalizeDebt = (item, index) => {
   const monthlyPayment = Number(item.monthlyPayment ?? item.monthly_payment ?? item.amount);
-  if (!Number.isFinite(monthlyPayment) || monthlyPayment <= 0) return null;
+  const paymentMode = item.paymentMode === "manual" || item.payment_mode === "manual" ? "manual" : "fixed";
+  if (paymentMode === "fixed" && (!Number.isFinite(monthlyPayment) || monthlyPayment <= 0)) return null;
 
   const platform = debtPlatformPresets.includes(item.platform || item.source)
     ? item.platform || item.source
@@ -473,12 +479,32 @@ const normalizeDebt = (item, index) => {
     platform,
     name,
     totalAmount: Number.isFinite(totalAmount) && totalAmount > 0 ? totalAmount : 0,
-    monthlyPayment,
+    paymentMode,
+    monthlyPayment: Number.isFinite(monthlyPayment) && monthlyPayment > 0 ? monthlyPayment : 0,
     bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
     startYear,
     startMonth,
     active: item.active !== false,
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+  };
+};
+
+const normalizeDebtPayment = (item, index) => {
+  const amount = Number(item.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const debtId = String(item.debtId || item.debt_id || item.originalId || "").trim();
+  if (!debtId) return null;
+
+  return {
+    id: item.id ?? Date.now() + index,
+    type: "debt-manual-payment",
+    debtId,
+    amount,
+    bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
+    date: item.date || item.paymentDate || item.payment_date || today,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.updated_at || "",
   };
 };
 
@@ -611,6 +637,9 @@ const migrateState = (saved) => {
   next.debts = (Array.isArray(saved?.debts) ? saved.debts : [])
     .map(normalizeDebt)
     .filter(Boolean);
+  next.debtPayments = (Array.isArray(saved?.debtPayments) ? saved.debtPayments : [])
+    .map(normalizeDebtPayment)
+    .filter(Boolean);
   next.couple = normalizeCouple(saved?.couple || {});
   next.coupleRequests = (Array.isArray(saved?.coupleRequests) ? saved.coupleRequests : [])
     .map(normalizeCoupleRequest)
@@ -724,6 +753,7 @@ const expenses = () => state.transactions.filter((item) => item.type === "expens
 const incomeEntries = () => (Array.isArray(state.incomeEntries) ? state.incomeEntries : []);
 const fixedExpenses = () => (Array.isArray(state.fixedExpenses) ? state.fixedExpenses : []);
 const debts = () => (Array.isArray(state.debts) ? state.debts : []);
+const debtPayments = () => (Array.isArray(state.debtPayments) ? state.debtPayments : []);
 const fixedExpensesForYear = (year = state.selectedYear) =>
   fixedExpenses().filter((item) => Number(item.year) === Number(year));
 const monthFixedExpenses = (year, month) =>
@@ -745,7 +775,21 @@ const debtMonthCountUntil = (debt, targetYear = state.selectedYear, targetMonth 
   if (targetIndex < startIndex || debt.active === false) return 0;
   return targetIndex - startIndex + 1;
 };
+const debtPaymentKey = (debtId, year, month) => `${debtId}-${monthKey(year, month)}`;
+const manualDebtPaymentForMonth = (debt, year, month) =>
+  debtPayments().find(
+    (payment) =>
+      String(payment.debtId) === String(debt.id) &&
+      String(payment.date || today).slice(0, 7) === monthKey(year, month),
+  );
 const debtPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+  const targetKey = monthKey(targetYear, targetMonth);
+  if (debt.paymentMode === "manual") {
+    return debtPayments()
+      .filter((payment) => String(payment.debtId) === String(debt.id) && String(payment.date || today).slice(0, 7) <= targetKey)
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  }
+
   const months = debtMonthCountUntil(debt, targetYear, targetMonth);
   const monthlyPayment = Number(debt.monthlyPayment || 0);
   if (!months || !monthlyPayment) return 0;
@@ -756,6 +800,10 @@ const debtPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = stat
 const debtPaymentForMonth = (debt, year, month) => {
   const months = debtMonthCountUntil(debt, year, month);
   if (!months) return 0;
+  if (debt.paymentMode === "manual") {
+    return Number(manualDebtPaymentForMonth(debt, year, month)?.amount || 0);
+  }
+
   const monthlyPayment = Number(debt.monthlyPayment || 0);
   const totalAmount = Number(debt.totalAmount || 0);
   if (totalAmount <= 0) return monthlyPayment;
@@ -774,6 +822,7 @@ const monthDebtPayments = (year, month) =>
       const amount = debtPaymentForMonth(debt, year, month);
       if (!amount) return null;
       const name = getDebtName(debt);
+      const manualPayment = manualDebtPaymentForMonth(debt, year, month);
       return {
         id: `debt-${debt.id}-${monthKey(year, month)}`,
         originalId: debt.id,
@@ -784,12 +833,12 @@ const monthDebtPayments = (year, month) =>
         merchant: name,
         category: "还债",
         source: name,
-        bankId: debt.bankId,
+        bankId: manualPayment?.bankId || debt.bankId,
         amount,
         year,
         needType: "必须",
         affectsSaving: true,
-        remark: "每月固定还债",
+        remark: debt.paymentMode === "manual" ? "本月手动还债" : "每月固定还债",
         date: `${monthKey(year, month)}-01`,
         createdAt: debt.createdAt,
       };
@@ -1081,7 +1130,10 @@ const renderBankControls = () => {
 const renderDebtControls = () => {
   const platformSelect = document.querySelector(".debt-platform-select");
   const customField = document.querySelector(".debt-custom-platform-field");
+  const paymentModeSelect = document.querySelector(".debt-payment-mode");
+  const monthlyField = document.querySelector(".debt-monthly-field");
   if (customField) customField.hidden = !["银行", "其他"].includes(platformSelect?.value);
+  if (monthlyField) monthlyField.hidden = paymentModeSelect?.value === "manual";
 
   const selectedPayments = selectedDebtPayments();
   setText(".debt-month-total", money(total(selectedPayments)));
@@ -1101,17 +1153,32 @@ const renderDebtControls = () => {
       const remaining = debtRemaining(debt);
       const paid = debtPaidUntil(debt);
       const startText = `${debt.startYear}年${debt.startMonth}月开始`;
+      const manualPayment = manualDebtPaymentForMonth(debt, state.selectedYear, state.selectedMonth);
+      const isManual = debt.paymentMode === "manual";
       return `
         <article class="debt-row">
           <div>
             <strong>${cleanText(getDebtName(debt))}</strong>
-            <p>${startText} · 每月 ${money(debt.monthlyPayment)} · 扣 ${cleanText(getBankName(debt.bankId))}</p>
-            <p>${debt.totalAmount ? `已还 ${money(paid)} · 还剩 ${money(remaining)}` : "未填写总欠款，会持续每月固定付款"}</p>
+            <p>${startText} · ${isManual ? "每月自己填写金额" : `每月固定 ${money(debt.monthlyPayment)}`} · 扣 ${cleanText(getBankName(debt.bankId))}</p>
+            <p>${debt.totalAmount ? `已还 ${money(paid)} · 还剩 ${money(remaining)}` : isManual ? "未填写总欠款，每月填了才会计算" : "未填写总欠款，会持续每月固定付款"}</p>
           </div>
           <div class="amount-group">
-            <span class="debt-amount">${money(debt.monthlyPayment)}</span>
+            <span class="debt-amount">${isManual ? manualPayment ? money(manualPayment.amount) : "本月未填" : money(debt.monthlyPayment)}</span>
             <button class="delete-button" type="button" data-delete-debt="${cleanText(debt.id)}" aria-label="删除 ${cleanText(getDebtName(debt))} 还债计划">删</button>
           </div>
+          ${
+            isManual
+              ? `
+                <div class="debt-manual-field">
+                  <label>
+                    ${state.selectedMonth}月要还多少
+                    <input class="debt-manual-amount" data-debt-manual="${cleanText(debt.id)}" type="text" inputmode="decimal" value="${manualPayment ? cleanText(currency.format(manualPayment.amount)) : ""}" placeholder="例如 86.35" />
+                  </label>
+                  <button class="debt-save-month-button" type="button" data-save-manual-debt="${cleanText(debt.id)}">保存本月金额</button>
+                </div>
+              `
+              : ""
+          }
         </article>
       `;
     })
@@ -2268,6 +2335,10 @@ document.querySelector(".debt-platform-select")?.addEventListener("change", () =
   renderDebtControls();
 });
 
+document.querySelector(".debt-payment-mode")?.addEventListener("change", () => {
+  renderDebtControls();
+});
+
 document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
   event.preventDefault();
 
@@ -2275,10 +2346,12 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
   const customInput = document.querySelector(".debt-custom-platform");
   const totalInput = document.querySelector(".debt-total-amount");
   const monthlyInput = document.querySelector(".debt-monthly-amount");
+  const paymentModeInput = document.querySelector(".debt-payment-mode");
   const bankInput = document.querySelector(".debt-bank-select");
   const platform = debtPlatformPresets.includes(platformSelect?.value) ? platformSelect.value : "其他";
   const customName = String(customInput?.value || "").trim();
   const name = ["银行", "其他"].includes(platform) ? customName || platform : platform;
+  const paymentMode = paymentModeInput?.value === "manual" ? "manual" : "fixed";
   const monthlyPayment = parseMoneyInput(monthlyInput?.value || "0");
 
   if (!name) {
@@ -2287,7 +2360,7 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
     return;
   }
 
-  if (!monthlyPayment) {
+  if (paymentMode === "fixed" && !monthlyPayment) {
     monthlyInput?.focus();
     setText(".debt-note", "先写每个月要还多少钱，例如 188。");
     return;
@@ -2299,7 +2372,8 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
     platform,
     name,
     totalAmount: parseMoneyInput(totalInput?.value || "0"),
-    monthlyPayment,
+    paymentMode,
+    monthlyPayment: paymentMode === "fixed" ? monthlyPayment : 0,
     bankId: isKnownBankFor(state, bankInput?.value) ? bankInput.value : getPrimaryBankId(),
     startYear: state.selectedYear,
     startMonth: state.selectedMonth,
@@ -2312,7 +2386,12 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
   if (monthlyInput) monthlyInput.value = "";
   saveState();
   render();
-  setText(".debt-note", `已加入还债计划：${name}，每个月自动记录 ${money(monthlyPayment)}。`);
+  setText(
+    ".debt-note",
+    paymentMode === "manual"
+      ? `已加入还债计划：${name}。每个月回来这里填写当月金额。`
+      : `已加入还债计划：${name}，每个月自动记录 ${money(monthlyPayment)}。`,
+  );
 });
 
 document.querySelector(".extra-income-form")?.addEventListener("submit", async (event) => {
@@ -2622,6 +2701,7 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
   if (debtDeleteButton) {
     const id = debtDeleteButton.dataset.deleteDebt;
     state.debts = debts().filter((item) => String(item.id) !== String(id));
+    state.debtPayments = debtPayments().filter((item) => String(item.debtId) !== String(id));
     setText(".form-note", "已删除还债计划。");
     saveState();
     render();
@@ -2695,11 +2775,56 @@ document.querySelector(".fixed-expense-list")?.addEventListener("click", (event)
 });
 
 document.querySelector(".debt-list")?.addEventListener("click", (event) => {
+  const saveButton = event.target.closest("[data-save-manual-debt]");
+  if (saveButton) {
+    const debtId = saveButton.dataset.saveManualDebt;
+    const debt = debts().find((item) => String(item.id) === String(debtId));
+    const input = [...document.querySelectorAll("[data-debt-manual]")].find(
+      (field) => String(field.dataset.debtManual) === String(debtId),
+    );
+    const amount = parseMoneyInput(input?.value || "0");
+
+    if (!debt) return;
+    if (!amount) {
+      input?.focus();
+      setText(".debt-note", "先写这个月要还多少，例如 86.35。");
+      return;
+    }
+
+    const date = monthStart();
+    const existing = debtPayments().find(
+      (payment) => String(payment.debtId) === String(debt.id) && String(payment.date || today).slice(0, 7) === selectedKey(),
+    );
+
+    if (existing) {
+      existing.amount = amount;
+      existing.bankId = debt.bankId;
+      existing.updatedAt = new Date().toISOString();
+    } else {
+      state.debtPayments.push({
+        id: makeId("debt-payment"),
+        type: "debt-manual-payment",
+        debtId: String(debt.id),
+        amount,
+        bankId: debt.bankId,
+        date,
+        createdAt: new Date().toISOString(),
+        updatedAt: "",
+      });
+    }
+
+    saveState();
+    render();
+    setText(".debt-note", `已保存 ${state.selectedMonth} 月还款：${getDebtName(debt)} ${money(amount)}。`);
+    return;
+  }
+
   const button = event.target.closest("[data-delete-debt]");
   if (!button) return;
 
   const id = button.dataset.deleteDebt;
   state.debts = debts().filter((item) => String(item.id) !== String(id));
+  state.debtPayments = debtPayments().filter((item) => String(item.debtId) !== String(id));
   saveState();
   render();
   setText(".form-note", "已删除还债计划。");

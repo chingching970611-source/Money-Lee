@@ -878,6 +878,29 @@ button:focus-visible {
   grid-column: 1 / -1;
 }
 
+.debt-manual-field {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.debt-manual-field label {
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.debt-save-month-button {
+  padding: 0 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #c47b3d, #f0a84f);
+  border: 0;
+}
+
 .bank-note,
 .debt-note {
   margin: 12px 0 0;
@@ -1677,6 +1700,7 @@ button:focus-visible {
   .bank-form,
   .debt-grid,
   .debt-form,
+  .debt-manual-field,
   .couple-grid,
   .couple-link-fields,
   .couple-request-grid,
