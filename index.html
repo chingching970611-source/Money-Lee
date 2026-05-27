@@ -62,6 +62,7 @@
             <input class="lock-password-input" type="password" autocomplete="current-password" placeholder="输入你的密码" />
           </label>
           <button class="lock-primary-button" type="submit">解锁</button>
+          <button class="biometric-unlock-button" type="button" hidden>用脸部 / 指纹解锁</button>
           <button class="lock-link-button forgot-password-button" type="button">忘记密码？</button>
         </form>
 
@@ -93,6 +94,7 @@
         </a>
         <div class="header-actions">
           <span class="today-label"></span>
+          <button class="biometric-setup-button" type="button" hidden>脸/指纹</button>
           <button class="lock-button" type="button">锁定</button>
           <button class="install-button" type="button" hidden>安装应用</button>
           <button class="export-button" type="button">导出记录</button>
@@ -476,6 +478,10 @@
                 <label>
                   总欠款（可不填）
                   <input class="debt-total-amount" type="text" inputmode="decimal" placeholder="例如 2400" />
+                </label>
+                <label>
+                  之前已经还了多少（可不填）
+                  <input class="debt-paid-before-amount" type="text" inputmode="decimal" placeholder="例如 600" />
                 </label>
                 <label>
                   付款金额方式

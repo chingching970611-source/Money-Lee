@@ -462,6 +462,7 @@ const getDebtName = (item = {}) => {
 
 const normalizeDebt = (item, index) => {
   const monthlyPayment = Number(item.monthlyPayment ?? item.monthly_payment ?? item.amount);
+  const alreadyPaidAmount = Number(item.alreadyPaidAmount ?? item.already_paid_amount ?? item.paidBefore ?? item.paid_before ?? 0);
   const paymentMode = item.paymentMode === "manual" || item.payment_mode === "manual" ? "manual" : "fixed";
   if (paymentMode === "fixed" && (!Number.isFinite(monthlyPayment) || monthlyPayment <= 0)) return null;
 
@@ -479,6 +480,7 @@ const normalizeDebt = (item, index) => {
     platform,
     name,
     totalAmount: Number.isFinite(totalAmount) && totalAmount > 0 ? totalAmount : 0,
+    alreadyPaidAmount: Number.isFinite(alreadyPaidAmount) && alreadyPaidAmount > 0 ? alreadyPaidAmount : 0,
     paymentMode,
     monthlyPayment: Number.isFinite(monthlyPayment) && monthlyPayment > 0 ? monthlyPayment : 0,
     bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
@@ -683,6 +685,66 @@ const saveLockConfig = (config) => {
   localStorage.setItem(lockStorageKey, JSON.stringify(config));
 };
 
+const deviceUnlockUserKey = "xiaoqianben-device-unlock-user";
+
+const randomBytes = (length = 32) => {
+  const values = new Uint8Array(length);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(values);
+    return values;
+  }
+  return values.map(() => Math.floor(Math.random() * 256));
+};
+
+const bufferToBase64Url = (buffer) => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let text = "";
+  bytes.forEach((byte) => {
+    text += String.fromCharCode(byte);
+  });
+  return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const base64UrlToBuffer = (value) => {
+  const base64 = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+  const text = atob(padded);
+  const bytes = new Uint8Array(text.length);
+  for (let index = 0; index < text.length; index += 1) {
+    bytes[index] = text.charCodeAt(index);
+  }
+  return bytes.buffer;
+};
+
+const canUseDeviceUnlock = () =>
+  Boolean(window.isSecureContext && window.PublicKeyCredential && window.navigator?.credentials?.create && window.navigator?.credentials?.get);
+
+const getDeviceUnlockUserId = () => {
+  let userId = localStorage.getItem(deviceUnlockUserKey);
+  if (!userId) {
+    userId = bufferToBase64Url(randomBytes(32));
+    localStorage.setItem(deviceUnlockUserKey, userId);
+  }
+  return base64UrlToBuffer(userId);
+};
+
+const getDeviceCredentialId = (config = getLockConfig()) => config?.deviceCredentialId || config?.biometricCredentialId || "";
+
+const updateDeviceUnlockButtons = () => {
+  const supported = canUseDeviceUnlock();
+  const credentialId = getDeviceCredentialId();
+  document.querySelectorAll(".biometric-setup-button").forEach((button) => {
+    button.hidden = false;
+    button.title = supported
+      ? credentialId
+        ? "已开启脸部 / 指纹解锁"
+        : "开启脸部 / 指纹解锁"
+      : "这台设备暂时不支持脸部 / 指纹解锁";
+  });
+  const unlockButton = document.querySelector(".biometric-unlock-button");
+  if (unlockButton) unlockButton.hidden = !credentialId;
+};
+
 const randomSalt = () => {
   const values = new Uint8Array(16);
   if (window.crypto?.getRandomValues) {
@@ -727,6 +789,7 @@ const showLockPanel = (panelName) => {
     panel.hidden = panel.dataset.lockPanel !== panelName;
   });
   setLockMessage("");
+  updateDeviceUnlockButtons();
 };
 
 const setAppLocked = (locked) => {
@@ -746,6 +809,105 @@ const unlockApp = () => {
   document.querySelectorAll(".app-lock input").forEach((input) => {
     input.value = "";
   });
+  updateDeviceUnlockButtons();
+};
+
+const showDeviceUnlockStatus = (message, isError = false) => {
+  if (document.body.classList.contains("locked")) {
+    setLockMessage(message, isError);
+    return;
+  }
+  setText(".form-note", message);
+};
+
+const registerDeviceUnlock = async () => {
+  const config = getLockConfig();
+  if (!config?.passwordHash) {
+    setAppLocked(true);
+    showLockPanel("setup");
+    setLockMessage("先设置密码，之后才可以开启脸部 / 指纹解锁。", true);
+    return;
+  }
+
+  if (!canUseDeviceUnlock()) {
+    showDeviceUnlockStatus("这台设备或浏览器暂时不支持脸部 / 指纹解锁，仍然可以用密码。", true);
+    return;
+  }
+
+  try {
+    const credential = await window.navigator.credentials.create({
+      publicKey: {
+        challenge: randomBytes(32),
+        rp: { name: "小钱本" },
+        user: {
+          id: getDeviceUnlockUserId(),
+          name: "xiaoqianben-user",
+          displayName: "小钱本用户",
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey: "preferred",
+        },
+        timeout: 60000,
+        attestation: "none",
+      },
+    });
+
+    if (!credential?.rawId) throw new Error("No device credential created");
+
+    saveLockConfig({
+      ...config,
+      deviceCredentialId: bufferToBase64Url(credential.rawId),
+      deviceUnlockEnabledAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    updateDeviceUnlockButtons();
+    showDeviceUnlockStatus("已开启脸部 / 指纹解锁。下次打开可以直接用手机系统解锁。");
+  } catch (error) {
+    const message =
+      error?.name === "NotAllowedError"
+        ? "你刚刚取消了脸部 / 指纹设置，想开启时再点一次。"
+        : "这台设备暂时无法开启脸部 / 指纹解锁，仍然可以用密码。";
+    showDeviceUnlockStatus(message, error?.name !== "NotAllowedError");
+  }
+};
+
+const unlockWithDevice = async () => {
+  const credentialId = getDeviceCredentialId();
+  if (!credentialId) {
+    setLockMessage("还没有开启脸部 / 指纹解锁，请先用密码进入后开启。", true);
+    return;
+  }
+
+  if (!canUseDeviceUnlock()) {
+    setLockMessage("这台设备或浏览器暂时不支持脸部 / 指纹解锁，请用密码。", true);
+    return;
+  }
+
+  try {
+    const result = await window.navigator.credentials.get({
+      publicKey: {
+        challenge: randomBytes(32),
+        allowCredentials: [{ id: base64UrlToBuffer(credentialId), type: "public-key" }],
+        userVerification: "required",
+        timeout: 60000,
+      },
+    });
+
+    if (!result) throw new Error("No device unlock result");
+    unlockApp();
+  } catch (error) {
+    const message =
+      error?.name === "NotAllowedError"
+        ? "脸部 / 指纹解锁已取消，请再试一次或输入密码。"
+        : "脸部 / 指纹解锁失败，请用密码进入。";
+    setLockMessage(message, error?.name !== "NotAllowedError");
+  }
 };
 
 const getSelectedPlan = () => ensurePlanFor(state, state.selectedYear);
@@ -782,7 +944,12 @@ const manualDebtPaymentForMonth = (debt, year, month) =>
       String(payment.debtId) === String(debt.id) &&
       String(payment.date || today).slice(0, 7) === monthKey(year, month),
   );
-const debtPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+const debtAlreadyPaid = (debt) => Math.max(Number(debt.alreadyPaidAmount || 0), 0);
+const capDebtPaid = (debt, amount) => {
+  const totalAmount = Number(debt.totalAmount || 0);
+  return totalAmount > 0 ? Math.min(totalAmount, amount) : amount;
+};
+const debtTrackedPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
   const targetKey = monthKey(targetYear, targetMonth);
   if (debt.paymentMode === "manual") {
     return debtPayments()
@@ -795,8 +962,11 @@ const debtPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = stat
   if (!months || !monthlyPayment) return 0;
   const totalAmount = Number(debt.totalAmount || 0);
   const paid = monthlyPayment * months;
-  return totalAmount > 0 ? Math.min(totalAmount, paid) : paid;
+  if (totalAmount <= 0) return paid;
+  return Math.min(Math.max(totalAmount - debtAlreadyPaid(debt), 0), paid);
 };
+const debtPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) =>
+  capDebtPaid(debt, debtAlreadyPaid(debt) + debtTrackedPaidUntil(debt, targetYear, targetMonth));
 const debtPaymentForMonth = (debt, year, month) => {
   const months = debtMonthCountUntil(debt, year, month);
   if (!months) return 0;
@@ -807,7 +977,7 @@ const debtPaymentForMonth = (debt, year, month) => {
   const monthlyPayment = Number(debt.monthlyPayment || 0);
   const totalAmount = Number(debt.totalAmount || 0);
   if (totalAmount <= 0) return monthlyPayment;
-  const paidBefore = Math.min(totalAmount, monthlyPayment * (months - 1));
+  const paidBefore = Math.min(totalAmount, debtAlreadyPaid(debt) + monthlyPayment * (months - 1));
   const remaining = totalAmount - paidBefore;
   return remaining > 0 ? Math.min(monthlyPayment, remaining) : 0;
 };
@@ -913,7 +1083,7 @@ const getBankBalances = (targetYear = state.selectedYear, targetMonth = state.se
   });
 
   debts().forEach((item) => {
-    const paid = debtPaidUntil(item, targetYear, targetMonth);
+    const paid = debtTrackedPaidUntil(item, targetYear, targetMonth);
     if (paid > 0) addToBalance(balances, item.bankId, -paid);
   });
 
@@ -1152,15 +1322,21 @@ const renderDebtControls = () => {
     .map((debt) => {
       const remaining = debtRemaining(debt);
       const paid = debtPaidUntil(debt);
+      const alreadyPaid = debtAlreadyPaid(debt);
       const startText = `${debt.startYear}年${debt.startMonth}月开始`;
       const manualPayment = manualDebtPaymentForMonth(debt, state.selectedYear, state.selectedMonth);
       const isManual = debt.paymentMode === "manual";
+      const paidDescription = debt.totalAmount
+        ? `已还 ${money(paid)} · 还剩 ${money(remaining)}${alreadyPaid ? ` · 之前已还 ${money(alreadyPaid)}` : ""}`
+        : isManual
+          ? `${alreadyPaid ? `之前已还 ${money(alreadyPaid)} · ` : ""}未填写总欠款，每月填了才会计算`
+          : `${alreadyPaid ? `之前已还 ${money(alreadyPaid)} · ` : ""}未填写总欠款，会持续每月固定付款`;
       return `
         <article class="debt-row">
           <div>
             <strong>${cleanText(getDebtName(debt))}</strong>
             <p>${startText} · ${isManual ? "每月自己填写金额" : `每月固定 ${money(debt.monthlyPayment)}`} · 扣 ${cleanText(getBankName(debt.bankId))}</p>
-            <p>${debt.totalAmount ? `已还 ${money(paid)} · 还剩 ${money(remaining)}` : isManual ? "未填写总欠款，每月填了才会计算" : "未填写总欠款，会持续每月固定付款"}</p>
+            <p>${paidDescription}</p>
           </div>
           <div class="amount-group">
             <span class="debt-amount">${isManual ? manualPayment ? money(manualPayment.amount) : "本月未填" : money(debt.monthlyPayment)}</span>
@@ -1675,6 +1851,9 @@ document.querySelector(".lock-reset-form")?.addEventListener("submit", async (ev
 document.querySelector(".google-login-button")?.addEventListener("click", () => {
   setLockMessage("Google 登录入口已预留；下一步连接正式 Google 帐号后就能使用。");
 });
+
+document.querySelector(".biometric-setup-button")?.addEventListener("click", registerDeviceUnlock);
+document.querySelector(".biometric-unlock-button")?.addEventListener("click", unlockWithDevice);
 
 document.querySelector(".lock-button")?.addEventListener("click", () => {
   setAppLocked(true);
@@ -2345,6 +2524,7 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
   const platformSelect = document.querySelector(".debt-platform-select");
   const customInput = document.querySelector(".debt-custom-platform");
   const totalInput = document.querySelector(".debt-total-amount");
+  const paidBeforeInput = document.querySelector(".debt-paid-before-amount");
   const monthlyInput = document.querySelector(".debt-monthly-amount");
   const paymentModeInput = document.querySelector(".debt-payment-mode");
   const bankInput = document.querySelector(".debt-bank-select");
@@ -2353,6 +2533,7 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
   const name = ["银行", "其他"].includes(platform) ? customName || platform : platform;
   const paymentMode = paymentModeInput?.value === "manual" ? "manual" : "fixed";
   const monthlyPayment = parseMoneyInput(monthlyInput?.value || "0");
+  const alreadyPaidAmount = parseMoneyInput(paidBeforeInput?.value || "0");
 
   if (!name) {
     customInput?.focus();
@@ -2372,6 +2553,7 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
     platform,
     name,
     totalAmount: parseMoneyInput(totalInput?.value || "0"),
+    alreadyPaidAmount,
     paymentMode,
     monthlyPayment: paymentMode === "fixed" ? monthlyPayment : 0,
     bankId: isKnownBankFor(state, bankInput?.value) ? bankInput.value : getPrimaryBankId(),
@@ -2383,14 +2565,17 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
 
   if (customInput) customInput.value = "";
   if (totalInput) totalInput.value = "";
+  if (paidBeforeInput) paidBeforeInput.value = "";
   if (monthlyInput) monthlyInput.value = "";
   saveState();
   render();
   setText(
     ".debt-note",
-    paymentMode === "manual"
+    `${alreadyPaidAmount ? `之前已还 ${money(alreadyPaidAmount)} 已算进剩余欠款，不会重复扣账户。` : ""}${
+      paymentMode === "manual"
       ? `已加入还债计划：${name}。每个月回来这里填写当月金额。`
-      : `已加入还债计划：${name}，每个月自动记录 ${money(monthlyPayment)}。`,
+      : `已加入还债计划：${name}，每个月自动记录 ${money(monthlyPayment)}。`
+    }`,
   );
 });
 

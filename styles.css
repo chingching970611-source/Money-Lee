@@ -105,12 +105,20 @@ body.locked .app-lock {
 }
 
 .lock-primary-button,
+.biometric-unlock-button,
 .google-login-button {
   width: 100%;
   min-height: 48px;
   color: #fff;
   background: linear-gradient(135deg, var(--green), #55b47d);
   border: 0;
+}
+
+.biometric-unlock-button {
+  margin-top: 10px;
+  color: var(--ink);
+  background: linear-gradient(135deg, var(--amber), #f0a84f);
+  border: 1px solid #e6bd55;
 }
 
 .lock-link-button {
@@ -234,6 +242,7 @@ button,
 
 .export-button,
 .install-button,
+.biometric-setup-button,
 .lock-button,
 .reset-button,
 .clear-button,
@@ -250,6 +259,12 @@ button,
   color: #fff;
   background: var(--ink);
   border-color: var(--ink);
+}
+
+.biometric-setup-button {
+  color: var(--ink);
+  background: #fff4dc;
+  border-color: #e6bd55;
 }
 
 .lock-button {
@@ -1597,6 +1612,7 @@ button:focus-visible {
 
   .export-button,
   .install-button,
+  .biometric-setup-button,
   .lock-button {
     padding: 0 10px;
   }
