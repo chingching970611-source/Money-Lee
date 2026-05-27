@@ -41,7 +41,7 @@ const sourceAliases = {
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
 const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "家用", "其他"];
-const debtPlatformPresets = ["银行", "Credit Card", "Shopee", "Atome", "Grab", "其他"];
+const debtPlatformPresets = ["银行", "Credit Card", "Shopee", "Shopee PayLater", "Atome", "Grab", "Grab PayLater", "其他"];
 const needTypes = ["必须", "想要"];
 const viewNames = ["dashboard", "add", "records", "reports", "couple"];
 const defaultBankId = "main-bank";
@@ -2537,7 +2537,7 @@ document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
 
   if (!name) {
     customInput?.focus();
-    setText(".debt-note", "先写欠钱的平台名字，例如 Public Bank、Shopee、Atome、Grab 或其他。");
+    setText(".debt-note", "先写欠钱的平台名字，例如 Public Bank、Shopee PayLater、Atome、Grab PayLater 或其他。");
     return;
   }
 
