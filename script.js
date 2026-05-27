@@ -51,6 +51,8 @@ const now = new Date();
 const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const currentYear = now.getFullYear();
 const currentMonth = now.getMonth() + 1;
+const stateStorageKey = "xiaoqianben-data";
+const receiptTextStorageLimit = 1400;
 
 const pad = (value) => String(value).padStart(2, "0");
 const monthKey = (year, month) => `${year}-${pad(month)}`;
@@ -658,7 +660,7 @@ const migrateState = (saved) => {
 
 const loadState = () => {
   try {
-    const saved = JSON.parse(localStorage.getItem("xiaoqianben-data"));
+    const saved = JSON.parse(localStorage.getItem(stateStorageKey));
     return migrateState(saved);
   } catch {
     return migrateState();
@@ -668,7 +670,21 @@ const loadState = () => {
 let state = loadState();
 
 const saveState = () => {
-  localStorage.setItem("xiaoqianben-data", JSON.stringify(state));
+  if (Array.isArray(state.transactions)) {
+    state.transactions.forEach((item) => {
+      if (item.receiptText && item.receiptText.length > receiptTextStorageLimit) {
+        item.receiptText = item.receiptText.slice(0, receiptTextStorageLimit);
+      }
+    });
+  }
+
+  try {
+    localStorage.setItem(stateStorageKey, JSON.stringify(state));
+    return true;
+  } catch {
+    setText(".form-note", "储存空间不够了。我会先保住消费记录，照片会压小或暂时不保存。");
+    return false;
+  }
 };
 
 const lockStorageKey = "xiaoqianben-lock";
@@ -1925,10 +1941,12 @@ const loadReceiptImage = (file) =>
     image.src = url;
   });
 
-const createReceiptArchiveImage = async (file) => {
+const createReceiptArchiveImage = async (file, options = {}) => {
   const image = await loadReceiptImage(file);
-  const maxSide = 900;
-  const scale = Math.min(maxSide / Math.max(image.naturalWidth, image.naturalHeight), 1);
+  const maxWidth = options.maxWidth ?? 760;
+  const maxHeight = options.maxHeight ?? 1400;
+  const quality = options.quality ?? 0.52;
+  const scale = Math.min(maxWidth / image.naturalWidth, maxHeight / image.naturalHeight, 1);
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
   const canvas = document.createElement("canvas");
@@ -1937,15 +1955,31 @@ const createReceiptArchiveImage = async (file) => {
   canvas.width = width;
   canvas.height = height;
   context.drawImage(image, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", 0.68);
+  return canvas.toDataURL("image/jpeg", quality);
+};
+
+const createCompactReceiptArchiveImage = async (file) => {
+  const attempts = [
+    { maxWidth: 760, maxHeight: 1400, quality: 0.52 },
+    { maxWidth: 620, maxHeight: 1150, quality: 0.46 },
+    { maxWidth: 520, maxHeight: 980, quality: 0.4 },
+  ];
+
+  let smallest = "";
+  for (const options of attempts) {
+    const result = await createReceiptArchiveImage(file, options);
+    smallest = result;
+    if (result.length < 220000) return result;
+  }
+  return smallest;
 };
 
 const prepareReceiptImage = async (file, options = {}) => {
   const image = await loadReceiptImage(file);
   const cropTop = options.cropTop ?? 0;
   const cropBottom = options.cropBottom ?? 1;
-  const maxWidth = options.maxWidth ?? 1500;
-  const maxHeight = options.maxHeight ?? 3200;
+  const maxWidth = options.maxWidth ?? 1100;
+  const maxHeight = options.maxHeight ?? 2100;
   const sourceY = Math.round(image.naturalHeight * cropTop);
   const sourceHeight = Math.max(1, Math.round(image.naturalHeight * (cropBottom - cropTop)));
   const sourceWidth = image.naturalWidth;
@@ -1983,13 +2017,12 @@ const getBestReceiptText = async (worker, file) => {
   const image = await loadReceiptImage(file).catch(() => null);
   const isLongReceipt = image ? image.naturalHeight / Math.max(image.naturalWidth, 1) > 2.2 : false;
   const passes = [
-    { label: "整张收据", cropTop: 0, cropBottom: 1, maxWidth: 1500, maxHeight: isLongReceipt ? 3600 : 2600 },
+    { label: "整张收据", cropTop: 0, cropBottom: 1, maxWidth: 1100, maxHeight: isLongReceipt ? 2200 : 1900 },
   ];
 
   if (isLongReceipt) {
     passes.push(
-      { label: "收据下半段", cropTop: 0.35, cropBottom: 1, maxWidth: 1500, maxHeight: 3400 },
-      { label: "收据最底部", cropTop: 0.62, cropBottom: 1, maxWidth: 1600, maxHeight: 3000 },
+      { label: "收据底部", cropTop: 0.5, cropBottom: 1, maxWidth: 1100, maxHeight: 1900 },
     );
   }
 
@@ -2227,7 +2260,7 @@ receiptInput?.addEventListener("change", async (event) => {
   setText(".form-note", "正在读取收据，长收据会多读底部一次。");
 
   try {
-    pendingReceipt.image = await createReceiptArchiveImage(file).catch(() => "");
+    pendingReceipt.image = await createCompactReceiptArchiveImage(file).catch(() => "");
     if (pendingReceipt.image && receiptImage) receiptImage.src = pendingReceipt.image;
 
     const worker = await getReceiptWorker();
@@ -2786,6 +2819,22 @@ function startExpenseEdit(id) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function saveExpenseStateWithReceiptFallback(transaction) {
+  if (saveState()) return { saved: true, receiptKept: true };
+
+  const hadReceipt = Boolean(transaction?.receiptImage || transaction?.receiptText);
+  if (hadReceipt) {
+    transaction.receiptImage = "";
+    transaction.receiptText = "";
+    pendingReceipt = { image: "", text: "", autoSaved: false };
+    if (receiptImage) receiptImage.removeAttribute("src");
+    if (receiptPreview) receiptPreview.hidden = true;
+    if (saveState()) return { saved: true, receiptKept: false };
+  }
+
+  return { saved: false, receiptKept: false };
+}
+
 function saveExpenseFromForm(options = {}) {
   const amountInput = document.querySelector(".entry-amount");
   const merchantInput = document.querySelector(".entry-merchant");
@@ -2841,18 +2890,25 @@ function saveExpenseFromForm(options = {}) {
   if (!existing) state.transactions.push(transaction);
 
   const wasEditing = Boolean(state.editingExpenseId);
+  const saveResult = saveExpenseStateWithReceiptFallback(transaction);
+  if (!saveResult.saved) {
+    if (!existing) state.transactions = state.transactions.filter((item) => item !== transaction);
+    setText(".form-note", "这笔记录还没有保存成功。请先删除一些旧收据照片，或先不放照片再新增。");
+    return false;
+  }
+
   clearExpenseForm();
   state.activeView = "records";
-  saveState();
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  const receiptWarning = saveResult.receiptKept ? "" : "（照片空间不够，这次先只保存记录）";
   setText(
     ".form-note",
     wasEditing
-      ? `已保存修改：${title} ${money(amount)}`
+      ? `已保存修改：${title} ${money(amount)}${receiptWarning}`
       : options.auto
-        ? `已自动新增：${title} ${money(amount)}`
-        : `已新增：${title} ${money(amount)}`,
+        ? `已自动新增：${title} ${money(amount)}${receiptWarning}`
+        : `已新增：${title} ${money(amount)}${receiptWarning}`,
   );
   return true;
 }
