@@ -407,6 +407,7 @@ const normalizeExpense = (item, index) => {
     amount,
     date: item.date || item.transaction_date || today,
     receiptText: item.receiptText || item.receipt_text || "",
+    receiptImageId: String(item.receiptImageId || item.receipt_image_id || "").trim(),
     receiptImage: item.receiptImage || item.receipt_image || "",
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
   };
@@ -1470,6 +1471,18 @@ const renderSummary = () => {
   if (ring) ring.style.setProperty("--used", `${usedPercent}%`);
 };
 
+async function hydrateReceiptThumbs(items = selectedSpendingItems()) {
+  const thumbs = [...document.querySelectorAll("[data-receipt-thumb]")];
+  if (!thumbs.length) return;
+
+  for (const thumb of thumbs) {
+    const item = items.find((entry) => String(entry.id) === String(thumb.dataset.receiptThumb));
+    if (!item) continue;
+    const image = await getReceiptImageForItem(item);
+    if (image) thumb.src = image;
+  }
+}
+
 const renderTransactions = () => {
   const list = document.querySelector(".transaction-list");
   if (!list) return;
@@ -1491,8 +1504,8 @@ const renderTransactions = () => {
         <article class="transaction-row ${item.isFixed ? "fixed-row" : ""}">
           <div class="transaction-main">
             ${
-              !item.isFixed && item.receiptImage
-                ? `<button class="receipt-thumb-button" type="button" data-view-receipt="${cleanText(item.id)}" aria-label="查看 ${cleanText(item.title)} 的收据"><img class="receipt-thumb" src="${item.receiptImage}" alt="${cleanText(item.title)} 的收据" /></button>`
+              !item.isFixed && hasReceiptImage(item)
+                ? `<button class="receipt-thumb-button" type="button" data-view-receipt="${cleanText(item.id)}" aria-label="查看 ${cleanText(item.title)} 的收据"><img class="receipt-thumb" data-receipt-thumb="${cleanText(item.id)}" src="${item.receiptImage || ""}" alt="${cleanText(item.title)} 的收据" /></button>`
                 : `<span class="category-dot" style="--dot: ${categoryColors[item.category] || categoryColors.生活}"></span>`
             }
             <div class="transaction-meta">
@@ -1524,6 +1537,8 @@ const renderTransactions = () => {
       `,
     )
     .join("");
+
+  hydrateReceiptThumbs(items);
 };
 
 const renderIncomeEntries = () => {
@@ -1595,7 +1610,7 @@ const renderReport = () => {
   const sourceTotals = getSourceTotals(items);
   const needTotals = getNeedTotals(items);
   const spent = total(items);
-  const receiptCount = items.filter((item) => item.receiptImage).length;
+  const receiptCount = items.filter(hasReceiptImage).length;
   const categoryEntries = expenseCategories
     .map((category) => [category, totals[category] || 0])
     .filter(([, amount]) => amount > 0)
@@ -1885,8 +1900,95 @@ let receiptWorkerPromise = null;
 let receiptJob = 0;
 let receiptPreviewUrl = "";
 let pendingReceipt = { image: "", text: "", autoSaved: false };
+let receiptDbPromise = null;
 
 const receiptToolPath = (path) => new URL(path, window.location.href).href.replace(/\/$/, "");
+
+const hasReceiptImage = (item = {}) => Boolean(item.receiptImage || item.receiptImageId);
+
+const openReceiptDb = () => {
+  if (!window.indexedDB) return Promise.reject(new Error("receipt photo storage is not ready"));
+  if (receiptDbPromise) return receiptDbPromise;
+
+  receiptDbPromise = new Promise((resolve, reject) => {
+    const request = window.indexedDB.open("xiaoqianben-receipts", 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("images")) db.createObjectStore("images", { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("receipt photo storage failed"));
+  });
+
+  return receiptDbPromise;
+};
+
+const runReceiptStore = async (mode, action) => {
+  const db = await openReceiptDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("images", mode);
+    const store = transaction.objectStore("images");
+    const request = action(store);
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || transaction.error || new Error("receipt photo action failed"));
+  });
+};
+
+const saveReceiptPhoto = async (id, image) => {
+  if (!id || !image) return "";
+  await runReceiptStore("readwrite", (store) =>
+    store.put({
+      id: String(id),
+      image,
+      updatedAt: new Date().toISOString(),
+    }),
+  );
+  return String(id);
+};
+
+const getReceiptPhoto = async (id) => {
+  if (!id) return "";
+  const record = await runReceiptStore("readonly", (store) => store.get(String(id))).catch(() => null);
+  return record?.image || "";
+};
+
+const deleteReceiptPhoto = async (id) => {
+  if (!id) return;
+  await runReceiptStore("readwrite", (store) => store.delete(String(id))).catch(() => {});
+};
+
+const clearReceiptPhotos = async () => {
+  await runReceiptStore("readwrite", (store) => store.clear()).catch(() => {});
+};
+
+const getReceiptImageForItem = async (item = {}) => {
+  if (item.receiptImage) return item.receiptImage;
+  return getReceiptPhoto(item.receiptImageId);
+};
+
+async function migrateReceiptPhotosToStore() {
+  let changed = false;
+
+  for (const item of expenses()) {
+    if (!item.receiptImage) continue;
+    const receiptImageId = item.receiptImageId || makeId("receipt");
+    try {
+      await saveReceiptPhoto(receiptImageId, item.receiptImage);
+      item.receiptImageId = receiptImageId;
+      item.receiptImage = "";
+      changed = true;
+    } catch {
+      return;
+    }
+  }
+
+  if (changed) {
+    saveState();
+    render();
+  }
+}
 
 const setReceiptMessage = (status, hint) => {
   if (receiptStatus) receiptStatus.textContent = status;
@@ -2290,7 +2392,7 @@ receiptInput?.addEventListener("change", async (event) => {
       const shouldAutoSave = document.querySelector(".receipt-auto-save")?.checked && result.amount && result.merchant;
       if (shouldAutoSave && !pendingReceipt.autoSaved) {
         pendingReceipt.autoSaved = true;
-        saveExpenseFromForm({ auto: true });
+        await saveExpenseFromForm({ auto: true });
       } else {
         setReceiptMessage("已自动填好", "请看一下 Grand Total 有没有读错，确认后按「新增消费」。");
         setText(".form-note", `收据已读取：${details.join("，")}。`);
@@ -2774,7 +2876,7 @@ function clearExpenseForm() {
   state.selectedExpenseBankId = getSelectedPlan().incomeBankId || getPrimaryBankId();
 }
 
-function fillExpenseForm(item) {
+async function fillExpenseForm(item) {
   document.querySelector(".entry-amount").value = item.amount ? currency.format(item.amount) : "";
   const merchantInput = document.querySelector(".entry-merchant");
   const remarkInput = document.querySelector(".entry-remark");
@@ -2795,8 +2897,10 @@ function fillExpenseForm(item) {
     autoSaved: false,
   };
 
-  if (item.receiptImage) {
-    if (receiptImage) receiptImage.src = item.receiptImage;
+  const storedReceiptImage = await getReceiptImageForItem(item);
+  if (storedReceiptImage) {
+    pendingReceipt.image = storedReceiptImage;
+    if (receiptImage) receiptImage.src = storedReceiptImage;
     if (receiptPreview) receiptPreview.hidden = false;
     setReceiptMessage("已载入原本收据", "可以修改价格、公司名或分类。");
   } else {
@@ -2804,7 +2908,7 @@ function fillExpenseForm(item) {
   }
 }
 
-function startExpenseEdit(id) {
+async function startExpenseEdit(id) {
   const item = state.transactions.find((transaction) => String(transaction.id) === String(id));
   if (!item) return;
   state.editingExpenseId = item.id;
@@ -2814,13 +2918,28 @@ function startExpenseEdit(id) {
   state.selectedMonth = parts.month;
   saveState();
   render();
-  fillExpenseForm(item);
+  await fillExpenseForm(item);
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+async function attachReceiptPhotoToTransaction(transaction, image) {
+  if (!image) return { receiptKept: hasReceiptImage(transaction), usedPhotoStore: false };
+
+  const receiptImageId = transaction.receiptImageId || makeId("receipt");
+  try {
+    await saveReceiptPhoto(receiptImageId, image);
+    transaction.receiptImageId = receiptImageId;
+    transaction.receiptImage = "";
+    return { receiptKept: true, usedPhotoStore: true };
+  } catch {
+    transaction.receiptImage = image;
+    return { receiptKept: true, usedPhotoStore: false };
+  }
+}
+
 function saveExpenseStateWithReceiptFallback(transaction) {
-  if (saveState()) return { saved: true, receiptKept: true };
+  if (saveState()) return { saved: true, receiptKept: hasReceiptImage(transaction) };
 
   const hadReceipt = Boolean(transaction?.receiptImage || transaction?.receiptText);
   if (hadReceipt) {
@@ -2835,7 +2954,7 @@ function saveExpenseStateWithReceiptFallback(transaction) {
   return { saved: false, receiptKept: false };
 }
 
-function saveExpenseFromForm(options = {}) {
+async function saveExpenseFromForm(options = {}) {
   const amountInput = document.querySelector(".entry-amount");
   const merchantInput = document.querySelector(".entry-merchant");
   const remarkInput = document.querySelector(".entry-remark");
@@ -2884,9 +3003,12 @@ function saveExpenseFromForm(options = {}) {
     amount,
     date,
     receiptText: pendingReceipt.text || transaction.receiptText || "",
-    receiptImage: pendingReceipt.image || transaction.receiptImage || "",
+    receiptImageId: transaction.receiptImageId || "",
+    receiptImage: transaction.receiptImage || "",
   });
 
+  const hadPendingReceiptImage = Boolean(pendingReceipt.image);
+  const receiptSave = await attachReceiptPhotoToTransaction(transaction, pendingReceipt.image);
   if (!existing) state.transactions.push(transaction);
 
   const wasEditing = Boolean(state.editingExpenseId);
@@ -2901,7 +3023,10 @@ function saveExpenseFromForm(options = {}) {
   state.activeView = "records";
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
-  const receiptWarning = saveResult.receiptKept ? "" : "（照片空间不够，这次先只保存记录）";
+  const receiptWarning =
+    hadPendingReceiptImage && !(receiptSave.receiptKept && saveResult.receiptKept)
+      ? "（照片空间不够，这次先只保存记录）"
+      : "";
   setText(
     ".form-note",
     wasEditing
@@ -2913,20 +3038,21 @@ function saveExpenseFromForm(options = {}) {
   return true;
 }
 
-document.querySelector(".entry-form")?.addEventListener("submit", (event) => {
+document.querySelector(".entry-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  saveExpenseFromForm();
+  await saveExpenseFromForm();
 });
 
 document.querySelector(".transaction-list")?.addEventListener("click", async (event) => {
   const receiptButton = event.target.closest("[data-view-receipt]");
   if (receiptButton) {
     const item = state.transactions.find((transaction) => String(transaction.id) === receiptButton.dataset.viewReceipt);
-    if (item?.receiptImage) {
+    if (hasReceiptImage(item)) {
+      const receipt = await getReceiptImageForItem(item);
       const modal = document.querySelector(".receipt-modal");
       const image = document.querySelector(".receipt-modal-image");
       const info = document.querySelector(".receipt-modal-info");
-      if (image) image.src = item.receiptImage;
+      if (image) image.src = receipt;
       if (info) {
         info.innerHTML = `
           <strong>${cleanText(item.merchant || item.title || item.category)}</strong>
@@ -2961,7 +3087,7 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
 
   const editButton = event.target.closest("[data-edit]");
   if (editButton) {
-    startExpenseEdit(editButton.dataset.edit);
+    await startExpenseEdit(editButton.dataset.edit);
     return;
   }
 
@@ -2969,7 +3095,9 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
   if (!button) return;
 
   const id = button.dataset.delete;
+  const removedTransaction = state.transactions.find((item) => String(item.id) === id);
   state.transactions = state.transactions.filter((item) => String(item.id) !== id);
+  await deleteReceiptPhoto(removedTransaction?.receiptImageId);
   setText(".form-note", "已删除一笔消费记录。");
   saveState();
   render();
@@ -3111,7 +3239,8 @@ document.querySelector(".couple-request-list")?.addEventListener("click", (event
   render();
 });
 
-document.querySelector(".reset-button")?.addEventListener("click", () => {
+document.querySelector(".reset-button")?.addEventListener("click", async () => {
+  await clearReceiptPhotos();
   state = clone(defaultState);
   saveState();
   updateEntryDateForSelectedMonth();
@@ -3123,10 +3252,18 @@ document.querySelector(".reset-button")?.addEventListener("click", () => {
 document.querySelector(".clear-button")?.addEventListener("click", async () => {
   const start = monthStart();
   const end = nextMonthStart();
+  const removedReceipts = state.transactions
+    .filter((item) => {
+      const date = item.date || today;
+      return date >= start && date < end;
+    })
+    .map((item) => item.receiptImageId)
+    .filter(Boolean);
   state.transactions = state.transactions.filter((item) => {
     const date = item.date || today;
     return date < start || date >= end;
   });
+  await Promise.all(removedReceipts.map(deleteReceiptPhoto));
   saveState();
   setText(".form-note", "已清空这个月的手动消费记录，固定支出会保留。");
   render();
@@ -3150,7 +3287,7 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
       item.merchant || "",
       item.remark || "",
       item.amount,
-      item.type === "expense" && item.receiptImage ? "有" : "无",
+      item.type === "expense" && hasReceiptImage(item) ? "有" : "无",
     ]
       .map((value) => `"${String(value).replaceAll('"', '""')}"`)
       .join(","),
@@ -3168,3 +3305,4 @@ document.querySelector(".export-button")?.addEventListener("click", () => {
 initAppLock();
 updateEntryDateForSelectedMonth();
 render();
+migrateReceiptPhotosToStore();
