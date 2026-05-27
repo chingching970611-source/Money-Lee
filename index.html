@@ -166,6 +166,7 @@
                   <button class="category-choice" type="button" data-category="友谊社交">友谊社交</button>
                   <button class="category-choice" type="button" data-category="健康">健康</button>
                   <button class="category-choice" type="button" data-category="住宿">住宿</button>
+                  <button class="category-choice" type="button" data-category="还债">还债</button>
                   <button class="category-choice" type="button" data-category="其他">其他</button>
                 </div>
               </div>
@@ -339,6 +340,7 @@
                     <option value="友谊社交">友谊社交</option>
                     <option value="健康">健康</option>
                     <option value="住宿">住宿</option>
+                    <option value="还债">还债</option>
                     <option value="学习">学习</option>
                     <option value="娱乐">娱乐</option>
                     <option value="餐饮">餐饮</option>
@@ -384,6 +386,50 @@
               <button class="bank-add-button" type="submit">加入账户</button>
             </form>
             <p class="bank-note">薪水和额外收入会进所选账户；只有选择「扣我的储蓄」的消费，才会从账户余额扣除。</p>
+          </section>
+
+          <section class="debt-panel" aria-labelledby="debt-title" data-view-panel="dashboard">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">还债记录</p>
+                <h2 id="debt-title">分期 / 欠款固定付款</h2>
+              </div>
+              <strong class="debt-month-total">RM 0.00</strong>
+            </div>
+            <form class="debt-form">
+              <div class="debt-grid">
+                <label>
+                  欠钱平台
+                  <select class="debt-platform-select">
+                    <option value="银行">银行</option>
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Shopee">Shopee</option>
+                    <option value="Atome">Atome</option>
+                    <option value="Grab">Grab</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </label>
+                <label class="debt-custom-platform-field" hidden>
+                  平台 / 银行名字
+                  <input class="debt-custom-platform" type="text" placeholder="例如 Public Bank、AEON、朋友名字" />
+                </label>
+                <label>
+                  总欠款（可不填）
+                  <input class="debt-total-amount" type="text" inputmode="decimal" placeholder="例如 2400" />
+                </label>
+                <label>
+                  每月固定还多少
+                  <input class="debt-monthly-amount" type="text" inputmode="decimal" placeholder="例如 188" />
+                </label>
+                <label>
+                  从哪个账户扣
+                  <select class="debt-bank-select"></select>
+                </label>
+              </div>
+              <button class="debt-add-button" type="submit">加入还债计划</button>
+            </form>
+            <div class="debt-list"></div>
+            <p class="debt-note">加入后，每个月会自动出现在「记录」，也会从所选银行账户余额扣除。</p>
           </section>
         </section>
 

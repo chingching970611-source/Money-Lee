@@ -15,10 +15,11 @@ const categoryColors = {
   友谊社交: "#4fb7a6",
   健康: "#e36f88",
   住宿: "#6876d8",
+  还债: "#c47b3d",
   其他: "#8c7b6d",
 };
 
-const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "情侣消费", "友谊社交", "健康", "住宿", "其他"];
+const expenseCategories = ["餐饮", "交通", "购物", "学习", "娱乐", "生活", "家用", "情侣消费", "友谊社交", "健康", "住宿", "还债", "其他"];
 const moneySources = ["Debit Card", "Credit Card", "TNG", "Grab", "Atome", "Shopee", "Cash", "其他"];
 const defaultMoneySource = "Debit Card";
 const sourceAliases = {
@@ -40,6 +41,7 @@ const sourceAliases = {
 const incomeSources = ["薪水", "生意", "兼职", "家人", "投资", "其他"];
 const extraIncomeSources = ["Commission", "奖金", "兼职", "生意", "其他"];
 const fixedExpensePresets = ["Credit Card", "Shopee PayLater", "Grab PayLater", "Insurance", "Telecom", "Atome", "家用", "其他"];
+const debtPlatformPresets = ["银行", "Credit Card", "Shopee", "Atome", "Grab", "其他"];
 const needTypes = ["必须", "想要"];
 const viewNames = ["dashboard", "add", "records", "reports", "couple"];
 const defaultBankId = "main-bank";
@@ -77,6 +79,7 @@ const defaultState = {
   transactions: [],
   incomeEntries: [],
   fixedExpenses: [],
+  debts: [],
   couple: {
     myName: "",
     partnerName: "",
@@ -177,6 +180,7 @@ const controlIconMap = {
   友谊社交: "users",
   健康: "health",
   住宿: "bed",
+  还债: "card",
   必须: "shield",
   想要: "sparkles",
   扣我的储蓄: "wallet",
@@ -318,6 +322,10 @@ const ensureBankData = (target) => {
     if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
   });
 
+  (target.debts || []).forEach((item) => {
+    if (!isKnownBankFor(target, item.bankId)) item.bankId = fallbackBankId;
+  });
+
   return target;
 };
 
@@ -436,6 +444,40 @@ const normalizeFixedExpense = (item, index) => {
     bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
     amount,
     year,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+  };
+};
+
+const getDebtName = (item = {}) => {
+  const platform = String(item.platform || item.source || "").trim();
+  const customName = String(item.customPlatform || item.custom_platform || item.name || item.title || "").trim();
+  if (platform && !["银行", "其他"].includes(platform)) return platform;
+  return customName || platform || "其他欠款";
+};
+
+const normalizeDebt = (item, index) => {
+  const monthlyPayment = Number(item.monthlyPayment ?? item.monthly_payment ?? item.amount);
+  if (!Number.isFinite(monthlyPayment) || monthlyPayment <= 0) return null;
+
+  const platform = debtPlatformPresets.includes(item.platform || item.source)
+    ? item.platform || item.source
+    : "其他";
+  const totalAmount = Number(item.totalAmount ?? item.total_amount ?? item.balance ?? 0);
+  const startYear = Number(item.startYear || item.start_year || item.year || currentYear) || currentYear;
+  const startMonth = Math.min(Math.max(Number(item.startMonth || item.start_month || item.month || 1) || 1, 1), 12);
+  const name = getDebtName({ ...item, platform });
+
+  return {
+    id: item.id ?? Date.now() + index,
+    type: "debt",
+    platform,
+    name,
+    totalAmount: Number.isFinite(totalAmount) && totalAmount > 0 ? totalAmount : 0,
+    monthlyPayment,
+    bankId: normalizeBankId(item.bankId || item.bank_id || item.savingBankId || item.saving_bank_id),
+    startYear,
+    startMonth,
+    active: item.active !== false,
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
   };
 };
@@ -566,6 +608,9 @@ const migrateState = (saved) => {
   next.fixedExpenses = (Array.isArray(saved?.fixedExpenses) ? saved.fixedExpenses : [])
     .map(normalizeFixedExpense)
     .filter(Boolean);
+  next.debts = (Array.isArray(saved?.debts) ? saved.debts : [])
+    .map(normalizeDebt)
+    .filter(Boolean);
   next.couple = normalizeCouple(saved?.couple || {});
   next.coupleRequests = (Array.isArray(saved?.coupleRequests) ? saved.coupleRequests : [])
     .map(normalizeCoupleRequest)
@@ -599,6 +644,7 @@ const getSelectedPlan = () => ensurePlanFor(state, state.selectedYear);
 const expenses = () => state.transactions.filter((item) => item.type === "expense");
 const incomeEntries = () => (Array.isArray(state.incomeEntries) ? state.incomeEntries : []);
 const fixedExpenses = () => (Array.isArray(state.fixedExpenses) ? state.fixedExpenses : []);
+const debts = () => (Array.isArray(state.debts) ? state.debts : []);
 const fixedExpensesForYear = (year = state.selectedYear) =>
   fixedExpenses().filter((item) => Number(item.year) === Number(year));
 const monthFixedExpenses = (year, month) =>
@@ -613,15 +659,73 @@ const monthFixedExpenses = (year, month) =>
     remark: "",
     date: `${monthKey(year, month)}-01`,
   }));
+const monthIndex = (year, month) => Number(year) * 12 + Number(month);
+const debtMonthCountUntil = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+  const startIndex = monthIndex(debt.startYear, debt.startMonth);
+  const targetIndex = monthIndex(targetYear, targetMonth);
+  if (targetIndex < startIndex || debt.active === false) return 0;
+  return targetIndex - startIndex + 1;
+};
+const debtPaidUntil = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+  const months = debtMonthCountUntil(debt, targetYear, targetMonth);
+  const monthlyPayment = Number(debt.monthlyPayment || 0);
+  if (!months || !monthlyPayment) return 0;
+  const totalAmount = Number(debt.totalAmount || 0);
+  const paid = monthlyPayment * months;
+  return totalAmount > 0 ? Math.min(totalAmount, paid) : paid;
+};
+const debtPaymentForMonth = (debt, year, month) => {
+  const months = debtMonthCountUntil(debt, year, month);
+  if (!months) return 0;
+  const monthlyPayment = Number(debt.monthlyPayment || 0);
+  const totalAmount = Number(debt.totalAmount || 0);
+  if (totalAmount <= 0) return monthlyPayment;
+  const paidBefore = Math.min(totalAmount, monthlyPayment * (months - 1));
+  const remaining = totalAmount - paidBefore;
+  return remaining > 0 ? Math.min(monthlyPayment, remaining) : 0;
+};
+const debtRemaining = (debt, targetYear = state.selectedYear, targetMonth = state.selectedMonth) => {
+  const totalAmount = Number(debt.totalAmount || 0);
+  if (totalAmount <= 0) return null;
+  return Math.max(totalAmount - debtPaidUntil(debt, targetYear, targetMonth), 0);
+};
+const monthDebtPayments = (year, month) =>
+  debts()
+    .map((debt) => {
+      const amount = debtPaymentForMonth(debt, year, month);
+      if (!amount) return null;
+      const name = getDebtName(debt);
+      return {
+        id: `debt-${debt.id}-${monthKey(year, month)}`,
+        originalId: debt.id,
+        type: "debt-payment",
+        isDebt: true,
+        isFixed: true,
+        title: `${name} 还款`,
+        merchant: name,
+        category: "还债",
+        source: name,
+        bankId: debt.bankId,
+        amount,
+        year,
+        needType: "必须",
+        affectsSaving: true,
+        remark: "每月固定还债",
+        date: `${monthKey(year, month)}-01`,
+        createdAt: debt.createdAt,
+      };
+    })
+    .filter(Boolean);
 const selectedExpenses = () => expenses().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
 const selectedFixedExpenses = () => monthFixedExpenses(state.selectedYear, state.selectedMonth);
-const selectedSpendingItems = () => [...selectedExpenses(), ...selectedFixedExpenses()];
+const selectedDebtPayments = () => monthDebtPayments(state.selectedYear, state.selectedMonth);
+const selectedSpendingItems = () => [...selectedExpenses(), ...selectedFixedExpenses(), ...selectedDebtPayments()];
 const deductibleSpendingItems = (items = selectedSpendingItems()) => items.filter((item) => item.affectsSaving !== false);
 const selectedIncomeEntries = () =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === selectedKey());
 const monthExpenses = (year, month) =>
   expenses().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
-const monthSpendingItems = (year, month) => [...monthExpenses(year, month), ...monthFixedExpenses(year, month)];
+const monthSpendingItems = (year, month) => [...monthExpenses(year, month), ...monthFixedExpenses(year, month), ...monthDebtPayments(year, month)];
 const monthDeductibleSpendingItems = (year, month) => deductibleSpendingItems(monthSpendingItems(year, month));
 const monthIncomeEntries = (year, month) =>
   incomeEntries().filter((item) => String(item.date || today).slice(0, 7) === monthKey(year, month));
@@ -678,6 +782,11 @@ const getBankBalances = (targetYear = state.selectedYear, targetMonth = state.se
   fixedExpenses().forEach((item) => {
     const months = monthCountUntil(item.year, targetYear, targetMonth);
     if (months > 0) addToBalance(balances, item.bankId, -Number(item.amount || 0) * months);
+  });
+
+  debts().forEach((item) => {
+    const paid = debtPaidUntil(item, targetYear, targetMonth);
+    if (paid > 0) addToBalance(balances, item.bankId, -paid);
   });
 
   return balances;
@@ -861,6 +970,7 @@ const renderBankControls = () => {
   fillBankSelect(".extra-income-bank", plan.incomeBankId);
   fillBankSelect(".expense-bank-select", expenseBankId);
   fillBankSelect(".fixed-expense-bank-select", expenseBankId);
+  fillBankSelect(".debt-bank-select", expenseBankId);
 
   const expenseBankField = document.querySelector(".expense-bank-field");
   if (expenseBankField) expenseBankField.hidden = !state.selectedAffectsSaving;
@@ -886,6 +996,46 @@ const renderBankControls = () => {
         </article>
       `,
     )
+    .join("");
+};
+
+const renderDebtControls = () => {
+  const platformSelect = document.querySelector(".debt-platform-select");
+  const customField = document.querySelector(".debt-custom-platform-field");
+  if (customField) customField.hidden = !["银行", "其他"].includes(platformSelect?.value);
+
+  const selectedPayments = selectedDebtPayments();
+  setText(".debt-month-total", money(total(selectedPayments)));
+
+  const list = document.querySelector(".debt-list");
+  if (!list) return;
+
+  if (!debts().length) {
+    list.innerHTML = '<div class="mini-empty">还没有还债计划。加入后，每个月会自动进入记录和余额计算。</div>';
+    return;
+  }
+
+  list.innerHTML = debts()
+    .slice()
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+    .map((debt) => {
+      const remaining = debtRemaining(debt);
+      const paid = debtPaidUntil(debt);
+      const startText = `${debt.startYear}年${debt.startMonth}月开始`;
+      return `
+        <article class="debt-row">
+          <div>
+            <strong>${cleanText(getDebtName(debt))}</strong>
+            <p>${startText} · 每月 ${money(debt.monthlyPayment)} · 扣 ${cleanText(getBankName(debt.bankId))}</p>
+            <p>${debt.totalAmount ? `已还 ${money(paid)} · 还剩 ${money(remaining)}` : "未填写总欠款，会持续每月固定付款"}</p>
+          </div>
+          <div class="amount-group">
+            <span class="debt-amount">${money(debt.monthlyPayment)}</span>
+            <button class="delete-button" type="button" data-delete-debt="${cleanText(debt.id)}" aria-label="删除 ${cleanText(getDebtName(debt))} 还债计划">删</button>
+          </div>
+        </article>
+      `;
+    })
     .join("");
 };
 
@@ -1023,7 +1173,9 @@ const renderTransactions = () => {
             <span class="transaction-amount">-${money(item.amount)}</span>
             ${
               item.isFixed
-                ? `<button class="delete-button" type="button" data-delete-fixed="${cleanText(item.originalId)}" aria-label="删除固定支出 ${cleanText(item.title)}">删</button>`
+                ? item.isDebt
+                  ? `<button class="delete-button" type="button" data-delete-debt="${cleanText(item.originalId)}" aria-label="删除还债计划 ${cleanText(item.title)}">删</button>`
+                  : `<button class="delete-button" type="button" data-delete-fixed="${cleanText(item.originalId)}" aria-label="删除固定支出 ${cleanText(item.title)}">删</button>`
                 : `
                   <button class="edit-button" type="button" data-edit="${cleanText(item.id)}" aria-label="修改 ${cleanText(item.title)}">改</button>
                   <button class="delete-button" type="button" data-delete="${cleanText(item.id)}" aria-label="删除 ${cleanText(item.title)}">删</button>
@@ -1245,6 +1397,7 @@ const render = () => {
   renderMonthControls();
   renderPlanControls();
   renderBankControls();
+  renderDebtControls();
   renderFixedExpenseControls();
   renderSummary();
   renderTransactions();
@@ -1913,6 +2066,57 @@ document.querySelector(".bank-list")?.addEventListener("change", (event) => {
   setText(".bank-note", `已更新 ${account.name} 的起始余额。`);
 });
 
+document.querySelector(".debt-platform-select")?.addEventListener("change", () => {
+  renderDebtControls();
+});
+
+document.querySelector(".debt-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const platformSelect = document.querySelector(".debt-platform-select");
+  const customInput = document.querySelector(".debt-custom-platform");
+  const totalInput = document.querySelector(".debt-total-amount");
+  const monthlyInput = document.querySelector(".debt-monthly-amount");
+  const bankInput = document.querySelector(".debt-bank-select");
+  const platform = debtPlatformPresets.includes(platformSelect?.value) ? platformSelect.value : "其他";
+  const customName = String(customInput?.value || "").trim();
+  const name = ["银行", "其他"].includes(platform) ? customName || platform : platform;
+  const monthlyPayment = parseMoneyInput(monthlyInput?.value || "0");
+
+  if (!name) {
+    customInput?.focus();
+    setText(".debt-note", "先写欠钱的平台名字，例如 Public Bank、Shopee、Atome、Grab 或其他。");
+    return;
+  }
+
+  if (!monthlyPayment) {
+    monthlyInput?.focus();
+    setText(".debt-note", "先写每个月要还多少钱，例如 188。");
+    return;
+  }
+
+  state.debts.push({
+    id: makeId("debt"),
+    type: "debt",
+    platform,
+    name,
+    totalAmount: parseMoneyInput(totalInput?.value || "0"),
+    monthlyPayment,
+    bankId: isKnownBankFor(state, bankInput?.value) ? bankInput.value : getPrimaryBankId(),
+    startYear: state.selectedYear,
+    startMonth: state.selectedMonth,
+    active: true,
+    createdAt: new Date().toISOString(),
+  });
+
+  if (customInput) customInput.value = "";
+  if (totalInput) totalInput.value = "";
+  if (monthlyInput) monthlyInput.value = "";
+  saveState();
+  render();
+  setText(".debt-note", `已加入还债计划：${name}，每个月自动记录 ${money(monthlyPayment)}。`);
+});
+
 document.querySelector(".extra-income-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -2216,6 +2420,16 @@ document.querySelector(".transaction-list")?.addEventListener("click", async (ev
     return;
   }
 
+  const debtDeleteButton = event.target.closest("[data-delete-debt]");
+  if (debtDeleteButton) {
+    const id = debtDeleteButton.dataset.deleteDebt;
+    state.debts = debts().filter((item) => String(item.id) !== String(id));
+    setText(".form-note", "已删除还债计划。");
+    saveState();
+    render();
+    return;
+  }
+
   const fixedDeleteButton = event.target.closest("[data-delete-fixed]");
   if (fixedDeleteButton) {
     const id = fixedDeleteButton.dataset.deleteFixed;
@@ -2282,6 +2496,17 @@ document.querySelector(".fixed-expense-list")?.addEventListener("click", (event)
   setText(".form-note", "已删除固定支出。");
 });
 
+document.querySelector(".debt-list")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-debt]");
+  if (!button) return;
+
+  const id = button.dataset.deleteDebt;
+  state.debts = debts().filter((item) => String(item.id) !== String(id));
+  saveState();
+  render();
+  setText(".form-note", "已删除还债计划。");
+});
+
 document.querySelector(".couple-request-list")?.addEventListener("click", (event) => {
   const approveButton = event.target.closest("[data-approve-couple]");
   const rejectButton = event.target.closest("[data-reject-couple]");
@@ -2345,13 +2570,14 @@ document.querySelector(".clear-button")?.addEventListener("click", async () => {
 
 document.querySelector(".export-button")?.addEventListener("click", () => {
   const header = "日期,类型,来源,银行账户,分类,必须想要,是否扣储蓄,公司店名,Remark,金额,有收据";
-  const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) =>
-    monthFixedExpenses(state.selectedYear, index + 1),
-  ).flat();
+  const fixedRows = Array.from({ length: state.selectedMonth }, (_, index) => [
+    ...monthFixedExpenses(state.selectedYear, index + 1),
+    ...monthDebtPayments(state.selectedYear, index + 1),
+  ]).flat();
   const rows = [...expenses(), ...fixedRows, ...incomeEntries()].map((item) =>
     [
       item.date,
-      item.type === "income" ? "收入" : item.isFixed ? "固定支出" : "消费",
+      item.type === "income" ? "收入" : item.isDebt ? "还债" : item.isFixed ? "固定支出" : "消费",
       item.source,
       item.type === "income" || item.affectsSaving !== false ? getBankName(item.bankId) : "",
       item.category,

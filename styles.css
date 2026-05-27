@@ -231,6 +231,7 @@ h2 {
 .entry-form label,
 .income-form label,
 .bank-form label,
+.debt-form label,
 .extra-income-form label,
 .fixed-expense-form label {
   display: grid;
@@ -268,6 +269,7 @@ button:focus-visible {
 .record-panel,
 .income-panel,
 .bank-panel,
+.debt-panel,
 .ledger-panel,
 .report-panel,
 .annual-panel,
@@ -324,6 +326,7 @@ button:focus-visible {
 .record-panel,
 .income-panel,
 .bank-panel,
+.debt-panel,
 .ledger-panel,
 .report-panel,
 .annual-panel,
@@ -643,7 +646,8 @@ button:focus-visible {
 
 .extra-income-form,
 .fixed-expense-form,
-.bank-form {
+.bank-form,
+.debt-form {
   display: grid;
   gap: 12px;
   margin-top: 18px;
@@ -656,7 +660,8 @@ button:focus-visible {
 .mini-heading,
 .income-entry-row,
 .fixed-expense-row,
-.bank-row {
+.bank-row,
+.debt-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -680,14 +685,17 @@ button:focus-visible {
 }
 
 .bank-total,
-.bank-balance {
+.bank-balance,
+.debt-month-total,
+.debt-amount {
   color: var(--green);
   font-weight: 900;
 }
 
 .extra-income-grid,
 .fixed-expense-grid,
-.bank-form {
+.bank-form,
+.debt-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
@@ -695,7 +703,8 @@ button:focus-visible {
 
 .extra-income-button,
 .fixed-expense-button,
-.bank-add-button {
+.bank-add-button,
+.debt-add-button {
   min-height: 44px;
   color: #fff;
   background: linear-gradient(135deg, var(--green), #55b47d);
@@ -710,16 +719,23 @@ button:focus-visible {
   grid-column: 1 / -1;
 }
 
+.debt-add-button {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #c47b3d, #f0a84f);
+}
+
 .extra-income-list,
 .fixed-expense-list,
-.bank-list {
+.bank-list,
+.debt-list {
   display: grid;
   gap: 8px;
 }
 
 .income-entry-row,
 .fixed-expense-row,
-.bank-row {
+.bank-row,
+.debt-row {
   padding: 10px;
   background: #fff;
   border: 1px solid var(--line);
@@ -729,6 +745,7 @@ button:focus-visible {
 .income-entry-row p,
 .fixed-expense-row p,
 .bank-row p,
+.debt-row p,
 .mini-empty {
   margin: 4px 0 0;
   color: var(--muted);
@@ -736,7 +753,8 @@ button:focus-visible {
   font-weight: 800;
 }
 
-.bank-row {
+.bank-row,
+.debt-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -750,7 +768,8 @@ button:focus-visible {
   grid-column: 1 / -1;
 }
 
-.bank-note {
+.bank-note,
+.debt-note {
   margin: 12px 0 0;
   color: var(--muted);
   line-height: 1.55;
@@ -1517,6 +1536,7 @@ button:focus-visible {
   .record-panel,
   .income-panel,
   .bank-panel,
+  .debt-panel,
   .ledger-panel,
   .report-panel,
   .annual-panel,
@@ -1540,6 +1560,8 @@ button:focus-visible {
   .extra-income-grid,
   .fixed-expense-grid,
   .bank-form,
+  .debt-grid,
+  .debt-form,
   .couple-grid,
   .couple-link-fields,
   .couple-request-grid,
@@ -1586,6 +1608,7 @@ button:focus-visible {
   .record-panel,
   .income-panel,
   .bank-panel,
+  .debt-panel,
   .ledger-panel,
   .report-panel,
   .annual-panel,
